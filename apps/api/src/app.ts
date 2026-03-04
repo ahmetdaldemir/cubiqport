@@ -1,0 +1,99 @@
+import Fastify from 'fastify';
+import cors from '@fastify/cors';
+import helmet from '@fastify/helmet';
+import rateLimit from '@fastify/rate-limit';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
+import { config } from './config/index.js';
+import { logger } from './utils/logger.js';
+import { authPluginModule } from './plugins/auth.plugin.js';
+import { AppError } from './utils/errors.js';
+
+// ─── Route modules ────────────────────────────────────────────────────────────
+import { authRoutes } from './modules/auth/auth.routes.js';
+import { serverRoutes } from './modules/servers/server.routes.js';
+import { domainRoutes } from './modules/domains/domain.routes.js';
+import { dnsRoutes } from './modules/dns/dns.routes.js';
+import { deploymentRoutes } from './modules/deployments/deployment.routes.js';
+import { monitoringRoutes } from './modules/monitoring/monitoring.routes.js';
+
+export async function buildApp() {
+  const app = Fastify({
+    logger,
+    trustProxy: true,
+    ajv: {
+      customOptions: {
+        removeAdditional: 'all',
+        coerceTypes: true,
+      },
+    },
+  });
+
+  // ── Security ────────────────────────────────────────────────────────────────
+  await app.register(helmet, { global: true });
+  await app.register(cors, {
+    origin: config.NODE_ENV === 'production' ? false : true,
+    credentials: true,
+  });
+  await app.register(rateLimit, {
+    max: 200,
+    timeWindow: '1 minute',
+    errorResponseBuilder: () => ({
+      success: false,
+      error: 'Too many requests, please slow down.',
+    }),
+  });
+
+  // ── Auth ────────────────────────────────────────────────────────────────────
+  await app.register(authPluginModule);
+
+  // ── Swagger ─────────────────────────────────────────────────────────────────
+  if (config.NODE_ENV !== 'production') {
+    await app.register(swagger, {
+      openapi: {
+        info: { title: 'CubiqPort API', version: '1.0.0', description: 'Server orchestration API' },
+        components: {
+          securitySchemes: {
+            bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+          },
+        },
+        security: [{ bearerAuth: [] }],
+      },
+    });
+    await app.register(swaggerUi, { routePrefix: '/docs' });
+  }
+
+  // ── Global error handler ────────────────────────────────────────────────────
+  app.setErrorHandler((error, _req, reply) => {
+    if (error instanceof AppError) {
+      return reply.status(error.statusCode).send({
+        success: false,
+        error: error.message,
+        code: error.code,
+      });
+    }
+    // Fastify validation errors
+    if (error.validation) {
+      return reply.status(422).send({
+        success: false,
+        error: 'Validation failed',
+        details: error.validation,
+      });
+    }
+    app.log.error({ err: error }, 'Unhandled error');
+    return reply.status(500).send({ success: false, error: 'Internal server error' });
+  });
+
+  // ── Health check ────────────────────────────────────────────────────────────
+  app.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));
+
+  // ── Route registration ──────────────────────────────────────────────────────
+  await app.register(authRoutes, { prefix: '/api/v1/auth' });
+  await app.register(serverRoutes, { prefix: '/api/v1/servers' });
+  await app.register(domainRoutes, { prefix: '/api/v1/domains' });
+  await app.register(dnsRoutes, { prefix: '/api/v1/dns' });
+  await app.register(deploymentRoutes, { prefix: '/api/v1/deployments' });
+  await app.register(monitoringRoutes, { prefix: '/api/v1/monitoring' });
+
+  return app;
+}

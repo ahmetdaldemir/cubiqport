@@ -1,0 +1,30 @@
+[Unit]
+Description=CubiqPort Agent
+Documentation=https://github.com/cubiqport/cubiqport
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/cubiq-agent
+ExecStart=/usr/bin/node /opt/cubiq-agent/dist/server.js
+Restart=always
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cubiq-agent
+
+# Environment
+Environment=NODE_ENV=production
+Environment=AGENT_PORT=9000
+# Set these via /etc/cubiq-agent.env or EnvironmentFile
+EnvironmentFile=-/etc/cubiq-agent.env
+
+# Security hardening
+NoNewPrivileges=false
+PrivateTmp=true
+ProtectSystem=false
+
+[Install]
+WantedBy=multi-user.target
