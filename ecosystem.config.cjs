@@ -1,10 +1,11 @@
-const APP_DIR = '/var/www/port8083/html';
+const APP_DIR = '/var/www/html';
 
 module.exports = {
   apps: [
     {
       name: 'cubiqport-api',
-      script: `${APP_DIR}/apps/api/dist/apps/api/src/server.js`,
+      script: 'node',
+      args: `--env-file=${APP_DIR}/.env ${APP_DIR}/apps/api/dist/apps/api/src/server.js`,
       cwd: APP_DIR,
       instances: 1,
       autorestart: true,
@@ -29,6 +30,8 @@ module.exports = {
         NODE_ENV: 'production',
         PORT: '3000',
         HOSTNAME: '0.0.0.0',
+        API_INTERNAL_URL: 'http://127.0.0.1:4000',
+        NEXT_PUBLIC_API_URL: 'https://cubiqport.com',
       },
       error_file: '/var/log/pm2/cubiqport-web-error.log',
       out_file: '/var/log/pm2/cubiqport-web-out.log',

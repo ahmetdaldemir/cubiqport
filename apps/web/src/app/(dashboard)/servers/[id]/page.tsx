@@ -25,8 +25,10 @@ import {
   XIcon,
   AlertTriangleIcon,
   MemoryStickIcon,
+  TerminalIcon,
 } from 'lucide-react';
 import Link from 'next/link';
+import { TerminalModal } from '@/components/terminal/terminal-modal';
 import { formatDate, formatBytes } from '@/lib/utils';
 import type { Server, Domain, ScanData } from '@cubiqport/shared';
 
@@ -407,6 +409,7 @@ export default function ServerDetailPage() {
   const [actionLoading, setActionLoading] = useState('');
   const [error, setError] = useState('');
   const [actionMsg, setActionMsg] = useState('');
+  const [terminalOpen, setTerminalOpen] = useState(false);
 
   const headers = { Authorization: `Bearer ${token}` };
 
@@ -546,6 +549,14 @@ export default function ServerDetailPage() {
             >
               <span>🧹</span> Sunucu Bakımı
             </Link>
+            <button
+              type="button"
+              onClick={() => setTerminalOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-lg text-sm font-medium hover:bg-emerald-500/20 transition-colors"
+            >
+              <TerminalIcon className="h-4 w-4" />
+              Terminale Bağlan
+            </button>
           </div>
         </div>
 
@@ -836,6 +847,13 @@ export default function ServerDetailPage() {
           </button>
         </div>
       </div>
+      {terminalOpen && server && (
+        <TerminalModal
+          serverId={server.id}
+          serverName={server.name}
+          onClose={() => setTerminalOpen(false)}
+        />
+      )}
     </div>
   );
 }

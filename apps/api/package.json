@@ -23,6 +23,7 @@
     "@fastify/rate-limit": "^9.1.0",
     "@fastify/swagger": "^8.15.0",
     "@fastify/swagger-ui": "^4.1.0",
+    "@fastify/websocket": "^10.0.1",
     "bcryptjs": "^2.4.3",
     "cloudflare": "^3.5.0",
     "drizzle-orm": "^0.38.4",

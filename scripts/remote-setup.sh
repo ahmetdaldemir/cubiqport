@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
 # CubiqPort — Remote Server Setup
-# Runs on: 144.91.65.111  as root
+# Runs on: 45.67.203.202  as root
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-APP_DIR="/var/www/port8083/html"
+APP_DIR="/var/www/html"
 LOG_DIR="/var/log/pm2"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -95,6 +95,6 @@ pm2 list
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo " ✓  CubiqPort deployed successfully!"
-echo "    Dashboard → http://144.91.65.111:8083"
-echo "    API       → http://144.91.65.111:4000"
+echo "    Dashboard → http://45.67.203.202:8083"
+echo "    API       → http://45.67.203.202:4000"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

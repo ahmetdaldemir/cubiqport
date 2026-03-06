@@ -7,9 +7,9 @@
 set -euo pipefail
 
 # ── Hardcoded Config ──────────────────────────────────────────────────────────
-SERVER="root@144.91.65.111"
-PASS="8H6g@yQ4ZtKST^^B"
-REMOTE_DIR="/var/www/port8083/html"
+SERVER="root@45.67.203.202"
+PASS="@198711Ad@"
+REMOTE_DIR="/var/www/html"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 TARGET="${1:-all}"
@@ -46,11 +46,18 @@ info "Sunucu bağlantısı test ediliyor…"
 ssh_run "echo ok" &>/dev/null || error "Sunucuya bağlanılamadı ($SERVER)"
 success "Bağlantı başarılı"
 
+# Uzak dizin ağacı — rsync öncesi sunucuda oluşturulur
+ensure_remote_dirs() {
+  ssh_run "mkdir -p $REMOTE_DIR/packages/shared/dist $REMOTE_DIR/apps/api/dist $REMOTE_DIR/apps/web/.next/standalone $REMOTE_DIR/apps/web/.next/static $REMOTE_DIR/scripts" \
+    || error "Uzak dizinler oluşturulamadı"
+}
+
 # =============================================================================
 # BUILD & DEPLOY: shared
 # =============================================================================
 deploy_shared() {
   info "=== Shared Package ==="
+  ensure_remote_dirs
 
   info "Build: packages/shared"
   (cd "$ROOT/packages/shared" && npm run build --silent) || error "Shared build başarısız"
@@ -75,6 +82,11 @@ deploy_api() {
   rsync_up "$ROOT/apps/api/dist/" "$REMOTE_DIR/apps/api/dist/"
   success "API dist yüklendi"
 
+  info "Upload: apps/api/src/db/migrations → sunucu (db:migrate için)"
+  ssh_run "mkdir -p $REMOTE_DIR/apps/api/dist/apps/api/src/db/migrations"
+  rsync_up "$ROOT/apps/api/src/db/migrations/" "$REMOTE_DIR/apps/api/dist/apps/api/src/db/migrations/"
+  success "Migrations yüklendi"
+
   info "Upload: apps/api/package.json → sunucu (yeni bağımlılıklar için)"
   sshpass -p "$PASS" rsync -az \
     -e "ssh -o StrictHostKeyChecking=no" \
@@ -88,6 +100,22 @@ deploy_api() {
   info "PM2 restart: cubiqport-api"
   ssh_run "pm2 restart cubiqport-api --update-env" || warn "pm2 restart başarısız, elle kontrol edin"
   success "API yeniden başlatıldı"
+
+  info "API sağlık kontrolü (127.0.0.1:4000/health)..."
+  sleep 3
+  HEALTH=$(ssh_run "curl -s -o /dev/null -w '%{http_code}' --connect-timeout 3 http://127.0.0.1:4000/health" 2>/dev/null || echo "000")
+  if [ "$HEALTH" = "200" ]; then
+    success "API yerelde yanıt veriyor (200)"
+  else
+    warn "API health check başarısız (kod: $HEALTH). Kontrol: pm2 logs cubiqport-api --lines 50"
+  fi
+
+  info "Nginx + seed script sunucuya kopyalanıyor"
+  ssh_run "mkdir -p $REMOTE_DIR/scripts"
+  sshpass -p "$PASS" rsync -az -e "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10" \
+    "$ROOT/scripts/nginx-cubiqport.conf" "$SERVER:$REMOTE_DIR/scripts/nginx-cubiqport.conf" 2>/dev/null || true
+  sshpass -p "$PASS" rsync -az -e "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10" \
+    "$ROOT/scripts/seed-admin-on-server.mjs" "$SERVER:$REMOTE_DIR/scripts/" 2>/dev/null || true
 }
 
 # =============================================================================
@@ -95,6 +123,7 @@ deploy_api() {
 # =============================================================================
 deploy_web() {
   info "=== Web (Next.js) ==="
+  ensure_remote_dirs
 
   info "Build: apps/web (Next.js standalone)"
   (cd "$ROOT/apps/web" && npm run build --silent) || error "Web build başarısız"
@@ -160,18 +189,20 @@ run_smoke_tests() {
   info "Servisler başlatılıyor... (8s bekleniyor)"
   sleep 8
 
-  # smoke-test.sh'yi çalıştır
-  # API ve Web aynı Nginx üzerinden port 8083'ten erişiliyor
+  # smoke-test.sh — cubiqport.com (Nginx 443 → API 4000, Next 3000)
   if bash "$ROOT/scripts/smoke-test.sh" \
-      "http://144.91.65.111:8083" \
-      "http://144.91.65.111:8083" \
+      "https://cubiqport.com" \
+      "https://cubiqport.com" \
       "info@cubiqport.com" \
       "@198711Ad@"; then
     success "Tüm smoke testler geçti ✓"
   else
     echo ""
-    warn "Bazı smoke testler başarısız! Logları kontrol edin:"
-    warn "  ssh_run 'pm2 logs cubiqport-api --lines 30'"
+    warn "Bazı smoke testler başarısız! Kontrol listesi:"
+    warn "  1. API logları: ssh $SERVER 'pm2 logs cubiqport-api --lines 50'"
+    warn "  2. Nginx'te /api/ istekleri 127.0.0.1:4000'e yönlenmeli."
+    warn "     Örnek config: $REMOTE_DIR/scripts/nginx-cubiqport.conf"
+    warn "     Uygulama: sunucuda nginx config'i güncelleyip 'nginx -t && systemctl reload nginx'"
   fi
 }
 

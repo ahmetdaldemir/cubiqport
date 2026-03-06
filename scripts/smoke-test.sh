@@ -8,8 +8,8 @@
 set -uo pipefail
 
 # ── Varsayılan değerler ────────────────────────────────────────────────────────
-API_URL="${1:-http://144.91.65.111:4000}"
-WEB_URL="${2:-http://144.91.65.111:8083}"
+API_URL="${1:-http://45.67.203.202:8083}"
+WEB_URL="${2:-http://45.67.203.202:8083}"
 ADMIN_EMAIL="${3:-info@cubiqport.com}"
 ADMIN_PASS="${4:-@198711Ad@}"
 

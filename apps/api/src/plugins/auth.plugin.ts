@@ -35,7 +35,7 @@ async function authPlugin(fastify: FastifyInstance) {
       }
     } catch (err) {
       if ((err as { code?: string }).code === 'SUSPENDED') throw err;
-      reply.status(401).send({ success: false, error: 'Unauthorized' });
+      return reply.status(401).send({ success: false, error: 'Unauthorized' });
     }
   });
 }

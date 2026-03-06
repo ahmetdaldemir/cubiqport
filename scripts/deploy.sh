@@ -5,10 +5,10 @@
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-SERVER_IP="144.91.65.111"
+SERVER_IP="45.67.203.202"
 SERVER_USER="root"
-SERVER_PASS='8H6g@yQ4ZtKST^^B'
-SERVER_PATH="/var/www/port8083/html"
+SERVER_PASS='@198711Ad@'
+SERVER_PATH="/var/www/html"
 SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=15"
 
 # ── Colour helpers ─────────────────────────────────────────────────────────────

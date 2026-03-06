@@ -173,7 +173,7 @@ export class MonitoringService {
     const isLocalServer =
       server.ip === '127.0.0.1' ||
       server.ip === 'localhost' ||
-      server.ip === '144.91.65.111';
+      server.ip === '45.67.203.202';
 
     // ── 2. Try remote agent ────────────────────────────────────────────────
     try {
@@ -250,7 +250,7 @@ export class MonitoringService {
           const isLocal =
             server.ip === '127.0.0.1' ||
             server.ip === 'localhost' ||
-            server.ip === '144.91.65.111';
+            server.ip === '45.67.203.202';
 
           let live: LiveMetrics | null = null;
           try {

@@ -4,6 +4,7 @@ import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
+import fastifyWebsocket from '@fastify/websocket';
 import { config } from './config/index.js';
 import { logger } from './utils/logger.js';
 import { authPluginModule } from './plugins/auth.plugin.js';
@@ -19,6 +20,7 @@ import { monitoringRoutes } from './modules/monitoring/monitoring.routes.js';
 import { billingRoutes } from './modules/billing/billing.routes.js';
 import { adminRoutes } from './modules/admin/admin.routes.js';
 import { maintenanceRoutes } from './modules/maintenance/maintenance.routes.js';
+import { terminalRoutes } from './modules/terminal/terminal.routes.js';
 
 export async function buildApp() {
   const app = Fastify({
@@ -50,6 +52,9 @@ export async function buildApp() {
   // ── Auth ────────────────────────────────────────────────────────────────────
   await app.register(authPluginModule);
 
+  // ── WebSocket (terminal SSH proxy) ───────────────────────────────────────────
+  await app.register(fastifyWebsocket, { options: { clientTracking: true } });
+
   // ── Swagger ─────────────────────────────────────────────────────────────────
   if (config.NODE_ENV !== 'production') {
     await app.register(swagger, {
@@ -75,12 +80,25 @@ export async function buildApp() {
         code: error.code,
       });
     }
-    // Fastify body schema validation errors → 422
-    if (error.validation) {
+    // Fastify validation / content-type hataları → 4xx (500 yerine)
+    const err = error as { validation?: unknown; name?: string; code?: string; statusCode?: number; message?: string };
+    if (err.validation) {
       return reply.status(422).send({
         success: false,
         error: 'Validation failed',
-        details: error.validation,
+        details: err.validation,
+      });
+    }
+    if (err.code === 'FST_ERR_CTP_EMPTY_JSON_BODY') {
+      return reply.status(400).send({ success: false, error: err.message ?? 'Body cannot be empty' });
+    }
+    if (err.code === 'FST_ERR_NOT_FOUND') {
+      return reply.status(404).send({ success: false, error: 'Not found' });
+    }
+    if (typeof err.statusCode === 'number' && err.statusCode >= 400 && err.statusCode < 500) {
+      return reply.status(err.statusCode).send({
+        success: false,
+        error: err.message ?? 'Request error',
       });
     }
     // Zod validation errors (controller parse çağrılarından) → 422
@@ -109,6 +127,7 @@ export async function buildApp() {
   await app.register(adminRoutes,   { prefix: '/api/v1/admin' });
   await app.register((await import('./modules/technologies/tech.routes.js')).techRoutes, { prefix: '/api/v1/servers' });
   await app.register(maintenanceRoutes, { prefix: '/api/v1/servers' });
+  await app.register(terminalRoutes, { prefix: '/api/v1/servers' });
 
   return app;
 }

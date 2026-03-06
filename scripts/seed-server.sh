@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
 # CubiqPort — Seed the default (self-hosted) server
-# Runs on: 144.91.65.111 as root
+# Runs on: 45.67.203.202 as root
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
 API="http://127.0.0.1:4000/api/v1"
 KEY_FILE="/root/.ssh/cubiqport_id_rsa"
 SERVER_NAME="Production Server (self)"
-SERVER_IP="144.91.65.111"
+SERVER_IP="45.67.203.202"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo " CubiqPort — Seeding default server"
@@ -102,5 +102,5 @@ fi
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo " ✓  Default server seeded!"
-echo "    Dashboard → http://144.91.65.111:8083/servers"
+echo "    Dashboard → http://45.67.203.202:8083/servers"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
