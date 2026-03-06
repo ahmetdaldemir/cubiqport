@@ -7,6 +7,7 @@ import {
 import { ServerRepository } from '../servers/server.repository.js';
 import { AppError, NotFoundError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
+import { buildConnectConfig } from '../../services/ssh.service.js';
 import { buildSshOptions } from '../../utils/ssh-credentials.js';
 import type { TechStatus } from '@cubiqport/shared';
 
@@ -22,13 +23,7 @@ export class TechService {
 
     const opts = buildSshOptions(server);
     const ssh = new NodeSSH();
-    await ssh.connect({
-      host:     opts.host,
-      port:     opts.port,
-      username: opts.username,
-      ...(opts.password ? { password: opts.password } : { privateKey: opts.privateKey }),
-      readyTimeout: 20_000,
-    });
+    await ssh.connect({ ...buildConnectConfig(opts), readyTimeout: 20_000 });
     return { ssh };
   }
 

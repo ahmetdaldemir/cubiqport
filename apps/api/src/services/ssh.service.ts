@@ -10,16 +10,26 @@ export interface SshConnectionOptions {
   password?: string;
 }
 
-function buildConnectConfig(opts: SshConnectionOptions) {
-  return {
+export function buildConnectConfig(opts: SshConnectionOptions) {
+  const base = {
     host: opts.host,
     port: opts.port,
     username: opts.username,
-    ...(opts.password
-      ? { password: opts.password }
-      : { privateKey: opts.privateKey }),
     readyTimeout: 15_000,
   };
+  if (opts.password) {
+    const password = opts.password;
+    return {
+      ...base,
+      password,
+      tryKeyboard: true,
+      tryAgent: false,
+      onKeyboardInteractive: (_name: string, _instructions: string, _lang: string, prompts: { prompt: string }[], finish: (responses: string[]) => void) => {
+        finish(prompts.map(() => password));
+      },
+    };
+  }
+  return { ...base, privateKey: opts.privateKey };
 }
 
 /**

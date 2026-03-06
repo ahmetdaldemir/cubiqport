@@ -6,8 +6,22 @@ const service = new TechService();
 
 export async function scanTechnologies(req: FastifyRequest, reply: FastifyReply) {
   const { id } = req.params as { id: string };
-  const data = await service.scanTechnologies(id, req.user.sub);
-  return reply.send({ success: true, data });
+  try {
+    const data = await service.scanTechnologies(id, req.user.sub);
+    return reply.send({ success: true, data });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const isConnectionError = message.includes('SSH') || message.includes('connection') || message.includes('ECONNREFUSED') || message.includes('authentication');
+    if (isConnectionError) {
+      return reply.status(200).send({
+        success: true,
+        data: [],
+        error: 'connection_failed',
+        message: 'Sunucuya bağlanılamadı. SSH erişimini ve sunucu durumunu kontrol edin.',
+      });
+    }
+    throw err;
+  }
 }
 
 export async function installTechnology(req: FastifyRequest, reply: FastifyReply) {

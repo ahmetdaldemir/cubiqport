@@ -22,7 +22,13 @@ async function runMigrations() {
       );
     `);
 
-    const migrationFiles = ['0001_initial_schema.sql', '0002_users_superadmin_suspended.sql'];
+    const migrationFiles = [
+  '0001_initial_schema.sql',
+  '0002_users_superadmin_suspended.sql',
+  '0003_servers_password_auth.sql',
+  '0004_domains_extra_columns.sql',
+  '0005_billing_tables.sql',
+];
 
     for (const file of migrationFiles) {
       const { rows } = await client.query(

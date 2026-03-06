@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { NodeSSH } from 'node-ssh';
 import { ServerRepository } from '../servers/server.repository.js';
+import { buildConnectConfig } from '../../services/ssh.service.js';
 import { buildSshOptions } from '../../utils/ssh-credentials.js';
 import { logger } from '../../utils/logger.js';
 
@@ -76,10 +77,7 @@ export async function terminalRoutes(fastify: FastifyInstance) {
           return;
         }
         ssh = new NodeSSH();
-        await ssh.connect({
-          ...buildSshOptions(server),
-          readyTimeout: 20_000,
-        });
+        await ssh.connect({ ...buildConnectConfig(buildSshOptions(server)), readyTimeout: 20_000 });
         shell = await ssh.requestShell({
           cols: 80,
           rows: 24,

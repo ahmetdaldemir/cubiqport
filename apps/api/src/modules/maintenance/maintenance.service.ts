@@ -1,6 +1,7 @@
 import { NodeSSH } from 'node-ssh';
 import { ServerRepository } from '../servers/server.repository.js';
 import { NotFoundError, AppError } from '../../utils/errors.js';
+import { buildConnectConfig } from '../../services/ssh.service.js';
 import { buildSshOptions } from '../../utils/ssh-credentials.js';
 import { logger } from '../../utils/logger.js';
 import {
@@ -70,10 +71,7 @@ async function connectSsh(serverId: string, userId: string) {
   const server = await repo.findById(serverId, userId);
   if (!server) throw new NotFoundError('Server');
   const ssh = new NodeSSH();
-  await ssh.connect({
-    ...buildSshOptions(server),
-    readyTimeout: 20_000,
-  });
+  await ssh.connect({ ...buildConnectConfig(buildSshOptions(server)), readyTimeout: 20_000 });
   return ssh;
 }
 

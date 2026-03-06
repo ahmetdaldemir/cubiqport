@@ -10,8 +10,8 @@ set -uo pipefail
 # ── Varsayılan değerler ────────────────────────────────────────────────────────
 API_URL="${1:-http://45.67.203.202:8083}"
 WEB_URL="${2:-http://45.67.203.202:8083}"
-ADMIN_EMAIL="${3:-info@cubiqport.com}"
-ADMIN_PASS="${4:-@198711Ad@}"
+ADMIN_EMAIL="${3:-admin@cubiqport.io}"
+ADMIN_PASS="${4:-Admin1234!}"
 
 # ── Renkler & yardımcılar ─────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
