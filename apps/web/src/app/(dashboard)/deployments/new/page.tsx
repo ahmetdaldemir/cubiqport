@@ -71,7 +71,7 @@ export default function NewDeploymentPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Failed to create deployment');
-      router.push('/dashboard/deployments');
+      router.push('/deployments');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create deployment');
     } finally {
@@ -85,7 +85,7 @@ export default function NewDeploymentPage() {
 
       <div className="p-6 space-y-6 max-w-2xl">
         <Link
-          href="/dashboard/deployments"
+          href="/deployments"
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeftIcon className="h-4 w-4" />
@@ -130,7 +130,7 @@ export default function NewDeploymentPage() {
               {domains.length === 0 && (
                 <p className="text-xs text-muted-foreground">
                   No active domains.{' '}
-                  <Link href="/dashboard/domains/new" className="text-primary hover:underline">Add one first.</Link>
+                  <Link href="/domains/new" className="text-primary hover:underline">Add one first.</Link>
                 </p>
               )}
             </div>
@@ -245,7 +245,7 @@ export default function NewDeploymentPage() {
                 Deploy
               </button>
               <Link
-                href="/dashboard/deployments"
+                href="/deployments"
                 className="rounded-lg border border-border px-5 py-2.5 text-sm font-medium transition hover:bg-secondary"
               >
                 Cancel

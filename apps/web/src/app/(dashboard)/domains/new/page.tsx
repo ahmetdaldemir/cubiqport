@@ -1,20 +1,23 @@
 'use client';
 
-import { useState, useEffect, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState, useEffect, FormEvent } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeftIcon, Loader2, GlobeIcon } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import type { Server } from '@cubiqport/shared';
 
-export default function NewDomainPage() {
+function NewDomainForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const preselectedServerId = searchParams.get('serverId') ?? '';
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [servers, setServers] = useState<Server[]>([]);
 
   const [form, setForm] = useState({
-    serverId: '',
+    serverId: preselectedServerId,
     domain: '',
     rootPath: '/var/www',
     port: '3000',
@@ -46,7 +49,7 @@ export default function NewDomainPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Failed to create domain');
-      router.push('/dashboard/domains');
+      router.push('/domains');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create domain');
     } finally {
@@ -60,7 +63,7 @@ export default function NewDomainPage() {
 
       <div className="p-6 space-y-6 max-w-2xl">
         <Link
-          href="/dashboard/domains"
+          href="/domains"
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeftIcon className="h-4 w-4" />
@@ -107,7 +110,7 @@ export default function NewDomainPage() {
               {servers.length === 0 && (
                 <p className="text-xs text-muted-foreground">
                   No active servers found.{' '}
-                  <Link href="/dashboard/servers/new" className="text-primary hover:underline">
+                  <Link href="/servers/new" className="text-primary hover:underline">
                     Add one first.
                   </Link>
                 </p>
@@ -162,7 +165,7 @@ export default function NewDomainPage() {
                 Create Domain
               </button>
               <Link
-                href="/dashboard/domains"
+                href="/domains"
                 className="rounded-lg border border-border px-5 py-2.5 text-sm font-medium transition hover:bg-secondary"
               >
                 Cancel
@@ -193,5 +196,13 @@ export default function NewDomainPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function NewDomainPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading…</div>}>
+      <NewDomainForm />
+    </Suspense>
   );
 }

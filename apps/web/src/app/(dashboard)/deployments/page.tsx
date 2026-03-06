@@ -23,7 +23,7 @@ export default async function DeploymentsPage() {
             {deployments.length} deployment{deployments.length !== 1 ? 's' : ''}
           </p>
           <a
-            href="/dashboard/deployments/new"
+            href="/deployments/new"
             className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
           >
             <PlusIcon className="h-4 w-4" />
@@ -41,7 +41,7 @@ export default async function DeploymentsPage() {
               Deploy your first application from a Git repository.
             </p>
             <a
-              href="/dashboard/deployments/new"
+              href="/deployments/new"
               className="mt-6 flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
             >
               <PlusIcon className="h-4 w-4" />

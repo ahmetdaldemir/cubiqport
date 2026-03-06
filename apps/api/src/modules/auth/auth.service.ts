@@ -3,9 +3,11 @@ import { eq } from 'drizzle-orm';
 import { db } from '../../db/index.js';
 import { users } from '../../db/schema.js';
 import { ConflictError, UnauthorizedError } from '../../utils/errors.js';
+import { BillingService } from '../billing/billing.service.js';
 import type { LoginInput, RegisterInput } from '@cubiqport/shared';
 
 const SALT_ROUNDS = 12;
+const billingService = new BillingService();
 
 export class AuthService {
   async register(input: RegisterInput) {
@@ -17,6 +19,9 @@ export class AuthService {
       .insert(users)
       .values({ email: input.email, password: hash })
       .returning({ id: users.id, email: users.email, role: users.role });
+
+    // Initialize 7-day trial + Stripe customer (async, non-blocking)
+    billingService.initUserBilling(user.id, user.email).catch(() => {});
 
     return user;
   }

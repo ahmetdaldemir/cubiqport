@@ -11,24 +11,31 @@ import {
   LogOutIcon,
   LayoutDashboardIcon,
   ShieldIcon,
+  CreditCardIcon,
+  UsersIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
+import { AUTH_TOKEN_KEY } from '@/lib/constants';
 
 const navItems = [
-  { href: '/dashboard', label: 'Overview', icon: LayoutDashboardIcon },
-  { href: '/dashboard/servers', label: 'Servers', icon: ServerIcon },
-  { href: '/dashboard/domains', label: 'Domains', icon: GlobeIcon },
-  { href: '/dashboard/deployments', label: 'Deployments', icon: RocketIcon },
-  { href: '/dashboard/dns', label: 'DNS', icon: NetworkIcon },
-  { href: '/dashboard/monitoring', label: 'Monitoring', icon: ActivityIcon },
+  { href: '/dashboard', label: 'Genel Bakış', icon: LayoutDashboardIcon },
+  { href: '/servers', label: 'Sunucular', icon: ServerIcon },
+  { href: '/domains', label: 'Domainler', icon: GlobeIcon },
+  { href: '/deployments', label: 'Deployments', icon: RocketIcon },
+  { href: '/dns', label: 'DNS', icon: NetworkIcon },
+  { href: '/monitoring', label: 'İzleme', icon: ActivityIcon },
+  { href: '/billing', label: 'Faturalama', icon: CreditCardIcon },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const { payload } = useAuth();
+  const isSuperAdmin = payload?.role === 'superadmin';
 
   function handleLogout() {
-    localStorage.removeItem('cubiq_token');
+    localStorage.removeItem(AUTH_TOKEN_KEY);
     router.push('/login');
   }
 
@@ -65,6 +72,26 @@ export function Sidebar() {
             </Link>
           );
         })}
+
+        {/* Superadmin only */}
+        {isSuperAdmin && (
+          <>
+            <div className="mx-0 my-2 h-px bg-border" />
+            <p className="px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Sistem Yönetimi</p>
+            <Link
+              href="/admin"
+              className={cn(
+                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                pathname.startsWith('/admin')
+                  ? 'bg-purple-100 text-purple-700'
+                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
+              )}
+            >
+              <UsersIcon className="h-4 w-4 shrink-0" />
+              Admin Panel
+            </Link>
+          </>
+        )}
       </nav>
 
       {/* Logout */}

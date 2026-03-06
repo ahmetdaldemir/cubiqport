@@ -1,6 +1,7 @@
-'use server';
-
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+const BASE =
+  typeof window === 'undefined'
+    ? (process.env.API_INTERNAL_URL ?? 'http://localhost:4000')
+    : '';   // client-side: use relative URL → goes through Next.js rewrite
 
 class ApiClient {
   private token: string | null = null;

@@ -18,6 +18,24 @@ const envSchema = z.object({
 
   AGENT_PORT: z.coerce.number().default(9000),
   AGENT_SECRET: z.string().min(16),
+
+  // Email (optional)
+  SMTP_HOST:   z.string().optional(),
+  SMTP_PORT:   z.string().optional(),
+  SMTP_SECURE: z.string().optional(),
+  SMTP_USER:   z.string().optional(),
+  SMTP_PASS:   z.string().optional(),
+  SMTP_FROM:   z.string().optional(),
+
+  // Stripe — public key opsiyonel, secret key zorunlu (payment flow etkin ise)
+  STRIPE_KEY:            z.string().optional(),
+  STRIPE_SECRET:         z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  STRIPE_PRICE_ID_MONTHLY: z.string().optional(),
+  STRIPE_PRICE_ID_YEARLY:  z.string().optional(),
+
+  // App
+  PUBLIC_URL: z.string().optional(),
 });
 
 function parseEnv() {

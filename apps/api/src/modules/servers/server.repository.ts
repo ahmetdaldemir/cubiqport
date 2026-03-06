@@ -38,6 +38,10 @@ export class ServerRepository {
     await db.update(servers).set({ status, updatedAt: new Date() }).where(eq(servers.id, id));
   }
 
+  async updateScanData(id: string, scanData: Record<string, unknown>): Promise<void> {
+    await db.update(servers).set({ scanData, updatedAt: new Date() }).where(eq(servers.id, id));
+  }
+
   async delete(id: string, userId: string): Promise<boolean> {
     const result = await db
       .delete(servers)

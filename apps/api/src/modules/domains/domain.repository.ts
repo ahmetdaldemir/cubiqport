@@ -1,13 +1,15 @@
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray, count } from 'drizzle-orm';
 import { db } from '../../db/index.js';
 import { domains, servers, type Domain, type NewDomain } from '../../db/schema.js';
 
 export class DomainRepository {
-  async findAll(userId: string): Promise<Domain[]> {
+  async findAll(userId: string, serverId?: string): Promise<Domain[]> {
+    const conditions = [eq(servers.userId, userId)];
+    if (serverId) conditions.push(eq(domains.serverId, serverId));
     return db
       .select({ domain: domains })
       .from(domains)
-      .innerJoin(servers, and(eq(domains.serverId, servers.id), eq(servers.userId, userId)))
+      .innerJoin(servers, and(eq(domains.serverId, servers.id), ...conditions))
       .then((rows) => rows.map((r) => r.domain));
   }
 
@@ -23,6 +25,10 @@ export class DomainRepository {
 
   async findByIdUnscoped(id: string): Promise<Domain | undefined> {
     return db.query.domains.findFirst({ where: eq(domains.id, id) });
+  }
+
+  async findByServerId(serverId: string): Promise<Domain[]> {
+    return db.query.domains.findMany({ where: eq(domains.serverId, serverId) });
   }
 
   async findByDomain(domain: string): Promise<Domain | undefined> {
@@ -45,6 +51,16 @@ export class DomainRepository {
 
   async updateStatus(id: string, status: Domain['status']): Promise<void> {
     await db.update(domains).set({ status, updatedAt: new Date() }).where(eq(domains.id, id));
+  }
+
+  async countByServerIds(serverIds: string[]): Promise<Map<string, number>> {
+    if (serverIds.length === 0) return new Map();
+    const rows = await db
+      .select({ serverId: domains.serverId, total: count(domains.id) })
+      .from(domains)
+      .where(inArray(domains.serverId, serverIds))
+      .groupBy(domains.serverId);
+    return new Map(rows.map((r) => [r.serverId, Number(r.total)]));
   }
 
   async delete(id: string, userId: string): Promise<boolean> {

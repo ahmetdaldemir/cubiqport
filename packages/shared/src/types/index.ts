@@ -7,10 +7,23 @@ export interface JwtPayload {
   exp?: number;
 }
 
-export type UserRole = 'admin' | 'user';
+export type UserRole = 'superadmin' | 'admin' | 'user';
 
 // ─── Servers ──────────────────────────────────────────────────────────────────
 export type ServerStatus = 'pending' | 'active' | 'error' | 'offline';
+
+export interface ScanData {
+  os?: string;
+  uptime?: string;
+  ramTotal?: string;
+  ramUsed?: string;
+  diskUsedPct?: string;
+  technologies?: { name: string; version: string; status: string }[];
+  databases?: string[];
+  nginxDomains?: string[];
+  nginxDomainDetails?: { domain: string; rootPath: string }[];
+  containers?: { name: string; image: string; status: string }[];
+}
 
 export interface Server {
   id: string;
@@ -19,8 +32,10 @@ export interface Server {
   ip: string;
   sshPort: number;
   sshUser: string;
+  sshAuthType: string;
   status: ServerStatus;
   agentVersion?: string | null;
+  scanData?: ScanData | null;
   createdAt: Date;
 }
 
@@ -102,7 +117,7 @@ export interface ContainerInfo {
   ports: string[];
 }
 
-// ─── Agent ────────────────────────────────────────────────────────────────────
+// ─── Agent Payloads ───────────────────────────────────────────────────────────
 export interface AgentDeployPayload {
   domainId: string;
   repository: string;
@@ -124,6 +139,27 @@ export interface AgentNginxPayload {
 export interface AgentSslPayload {
   domain: string;
   email: string;
+}
+
+// ─── Technologies ─────────────────────────────────────────────────────────────
+export type ServiceStatus = 'running' | 'stopped' | 'unknown';
+
+export interface TechVersion {
+  label: string;
+  value: string;
+}
+
+export interface TechStatus {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  icon: string;
+  installed: boolean;
+  version?: string;
+  serviceStatus?: ServiceStatus;
+  versions?: TechVersion[];
+  defaultVersion?: string;
 }
 
 // ─── API Responses ────────────────────────────────────────────────────────────

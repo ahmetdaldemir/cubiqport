@@ -14,7 +14,13 @@ import {
 import { relations } from 'drizzle-orm';
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
-export const userRoleEnum = pgEnum('user_role', ['admin', 'user']);
+export const userRoleEnum = pgEnum('user_role', ['superadmin', 'admin', 'user']);
+export const subscriptionStatusEnum = pgEnum('subscription_status', [
+  'trialing', 'active', 'past_due', 'canceled', 'expired',
+]);
+export const invoiceStatusEnum = pgEnum('invoice_status', [
+  'draft', 'open', 'paid', 'void', 'uncollectible',
+]);
 export const serverStatusEnum = pgEnum('server_status', ['pending', 'active', 'error', 'offline']);
 export const domainStatusEnum = pgEnum('domain_status', ['pending', 'active', 'error']);
 export const deploymentStatusEnum = pgEnum('deployment_status', [
@@ -32,6 +38,9 @@ export const users = pgTable('users', {
   email: varchar('email', { length: 255 }).notNull().unique(),
   password: varchar('password', { length: 255 }).notNull(),
   role: userRoleEnum('role').notNull().default('user'),
+  suspended: boolean('suspended').notNull().default(false),
+  suspendedAt: timestamp('suspended_at'),
+  suspendedReason: text('suspended_reason'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -48,10 +57,12 @@ export const servers = pgTable(
     ip: varchar('ip', { length: 45 }).notNull(),
     sshPort: integer('ssh_port').notNull().default(22),
     sshUser: varchar('ssh_user', { length: 100 }).notNull().default('root'),
-    // Encrypted PEM key stored at rest
-    sshKey: text('ssh_key').notNull(),
+    sshAuthType: varchar('ssh_auth_type', { length: 10 }).notNull().default('key'),
+    sshKey: text('ssh_key'),
+    sshPassword: text('ssh_password'),
     status: serverStatusEnum('status').notNull().default('pending'),
     agentVersion: varchar('agent_version', { length: 50 }),
+    scanData: jsonb('scan_data').$type<Record<string, unknown>>(),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
@@ -72,6 +83,12 @@ export const domains = pgTable(
     sslEnabled: boolean('ssl_enabled').notNull().default(false),
     sslEmail: varchar('ssl_email', { length: 255 }),
     status: domainStatusEnum('status').notNull().default('pending'),
+    githubRepo: varchar('github_repo', { length: 500 }),
+    githubBranch: varchar('github_branch', { length: 100 }).default('main'),
+    deployCommand: varchar('deploy_command', { length: 500 }),
+    webhookSecret: varchar('webhook_secret', { length: 100 }),
+    lastDeployAt: timestamp('last_deploy_at'),
+    deployLog: text('deploy_log'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
@@ -137,9 +154,84 @@ export const metrics = pgTable(
   ],
 );
 
+// ─── Subscriptions ────────────────────────────────────────────────────────────
+export const subscriptions = pgTable('subscriptions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }).unique(),
+  status: subscriptionStatusEnum('status').notNull().default('trialing'),
+  billingPeriod: varchar('billing_period', { length: 10 }).notNull().default('monthly'),
+  trialEndsAt: timestamp('trial_ends_at').notNull(),
+  stripeCustomerId: varchar('stripe_customer_id', { length: 100 }),
+  stripeSubscriptionId: varchar('stripe_subscription_id', { length: 100 }),
+  stripePriceId: varchar('stripe_price_id', { length: 100 }),
+  currentPeriodEnd: timestamp('current_period_end'),
+  cancelAtPeriodEnd: boolean('cancel_at_period_end').notNull().default(false),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => [index('subs_user_id_idx').on(t.userId)]);
+
+// ─── Billing Info ─────────────────────────────────────────────────────────────
+export const billingInfo = pgTable('billing_info', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }).unique(),
+  companyName: varchar('company_name', { length: 200 }),
+  taxId: varchar('tax_id', { length: 50 }),
+  address: text('address'),
+  city: varchar('city', { length: 100 }),
+  country: varchar('country', { length: 100 }).default('TR'),
+  billingEmail: varchar('billing_email', { length: 255 }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+// ─── Invoices ─────────────────────────────────────────────────────────────────
+export const invoices = pgTable('invoices', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  stripeInvoiceId: varchar('stripe_invoice_id', { length: 100 }),
+  invoiceNumber: varchar('invoice_number', { length: 50 }),
+  amountCents: integer('amount_cents').notNull(),
+  currency: varchar('currency', { length: 10 }).notNull().default('usd'),
+  status: invoiceStatusEnum('status').notNull().default('open'),
+  billingSnapshot: jsonb('billing_snapshot').$type<Record<string, string>>(),
+  pdfUrl: text('pdf_url'),
+  hostedUrl: text('hosted_url'),
+  paidAt: timestamp('paid_at'),
+  periodStart: timestamp('period_start'),
+  periodEnd: timestamp('period_end'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [index('invoices_user_id_idx').on(t.userId)]);
+
+// ─── Webhook Events ───────────────────────────────────────────────────────────
+export const webhookEvents = pgTable('webhook_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  stripeEventId: varchar('stripe_event_id', { length: 100 }).unique(),
+  eventType: varchar('event_type', { length: 100 }).notNull(),
+  payload: jsonb('payload').$type<Record<string, unknown>>().notNull().default({}),
+  processed: boolean('processed').notNull().default(false),
+  error: text('error'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  index('webhook_events_type_idx').on(t.eventType),
+  index('webhook_events_created_idx').on(t.createdAt),
+]);
+
 // ─── Relations ────────────────────────────────────────────────────────────────
-export const usersRelations = relations(users, ({ many }) => ({
+export const usersRelations = relations(users, ({ many, one }) => ({
   servers: many(servers),
+  subscription: one(subscriptions, { fields: [users.id], references: [subscriptions.userId] }),
+  billingInfo: one(billingInfo, { fields: [users.id], references: [billingInfo.userId] }),
+  invoices: many(invoices),
+}));
+
+export const subscriptionsRelations = relations(subscriptions, ({ one }) => ({
+  user: one(users, { fields: [subscriptions.userId], references: [users.id] }),
+}));
+export const billingInfoRelations = relations(billingInfo, ({ one }) => ({
+  user: one(users, { fields: [billingInfo.userId], references: [users.id] }),
+}));
+export const invoicesRelations = relations(invoices, ({ one }) => ({
+  user: one(users, { fields: [invoices.userId], references: [users.id] }),
 }));
 
 export const serversRelations = relations(servers, ({ one, many }) => ({
@@ -166,6 +258,8 @@ export const metricsRelations = relations(metrics, ({ one }) => ({
   server: one(servers, { fields: [metrics.serverId], references: [servers.id] }),
 }));
 
+// webhookEvents has no FK relations — standalone table
+
 // ─── Type Exports ─────────────────────────────────────────────────────────────
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -179,3 +273,11 @@ export type Deployment = typeof deployments.$inferSelect;
 export type NewDeployment = typeof deployments.$inferInsert;
 export type Metric = typeof metrics.$inferSelect;
 export type NewMetric = typeof metrics.$inferInsert;
+export type Subscription = typeof subscriptions.$inferSelect;
+export type NewSubscription = typeof subscriptions.$inferInsert;
+export type BillingInfo = typeof billingInfo.$inferSelect;
+export type NewBillingInfo = typeof billingInfo.$inferInsert;
+export type Invoice = typeof invoices.$inferSelect;
+export type NewInvoice = typeof invoices.$inferInsert;
+export type WebhookEvent = typeof webhookEvents.$inferSelect;
+export type NewWebhookEvent = typeof webhookEvents.$inferInsert;

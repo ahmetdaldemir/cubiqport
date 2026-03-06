@@ -1,0 +1,46 @@
+---
+description: Cubiqport Web frontend — Next.js App Router, API tüketimi, UI kuralları
+globs: apps/web/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Frontend Kuralları
+
+## Auth Token
+```typescript
+// ❌ localStorage.getItem('token')
+// ✅ import { AUTH_TOKEN_KEY } from '@/lib/constants';
+//    localStorage.getItem(AUTH_TOKEN_KEY)
+```
+Auth durumu için `useAuth` hook'unu kullan (`apps/web/src/hooks/useAuth.ts`).
+
+## API İstekleri — `API_BASE` sabiti
+```typescript
+import { API_BASE, AUTH_TOKEN_KEY } from '@/lib/constants';
+
+const res = await fetch(`${API_BASE}/api/v1/servers`, {
+  headers: { Authorization: `Bearer ${localStorage.getItem(AUTH_TOKEN_KEY)}` },
+});
+const json = await res.json();
+if (!res.ok) throw new Error(json.error ?? 'Hata');
+```
+
+## SSE (Streaming Job Çıktısı)
+```typescript
+const es = new EventSource(`${API_BASE}/api/v1/servers/${id}/maintenance/jobs/${jobId}/stream`);
+es.onmessage = (e) => {
+  const d = JSON.parse(e.data);
+  if (d.type === 'log')  setLines(p => [...p, d.line]);
+  if (d.type === 'done') { setStatus(d.status); es.close(); }
+};
+```
+
+## Bileşen Yapısı
+- `'use client'` yalnızca state/effect gereken sayfalara
+- Tekrarlanan UI parçaları alt bileşene çıkar (ör. `Section`, `DockerTable`)
+- Loading/error/empty state her veri bileşeninde bulunmalı
+
+## Yeni Sayfa Eklerken
+1. `app/(dashboard)/` altına ekle (layout otomatik uygulanır)
+2. İlgili sunucu detay sayfasına (`/servers/[id]/page.tsx`) link butonu ekle
+3. API URL pattern: `/api/v1/servers/:id/<modül>` kuralını koru

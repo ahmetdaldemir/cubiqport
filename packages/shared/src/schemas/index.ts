@@ -12,15 +12,31 @@ export const RegisterSchema = z.object({
 });
 
 // ─── Servers ──────────────────────────────────────────────────────────────────
-export const CreateServerSchema = z.object({
-  name: z.string().min(1).max(100),
-  ip: z.string().ip(),
-  sshPort: z.number().int().min(1).max(65535).default(22),
-  sshUser: z.string().min(1).max(100).default('root'),
-  sshKey: z.string().min(1),
-});
+export const CreateServerSchema = z
+  .object({
+    name: z.string().min(1).max(100),
+    ip: z.string().ip(),
+    sshPort: z.number().int().min(1).max(65535).default(22),
+    sshUser: z.string().min(1).max(100).default('root'),
+    sshAuthType: z.enum(['key', 'password']).default('password'),
+    sshKey: z.string().optional(),
+    sshPassword: z.string().optional(),
+  })
+  .refine(
+    (d) => {
+      if (d.sshAuthType === 'key') return !!d.sshKey;
+      if (d.sshAuthType === 'password') return !!d.sshPassword;
+      return false;
+    },
+    { message: 'Provide sshKey for key auth or sshPassword for password auth' },
+  );
 
-export const UpdateServerSchema = CreateServerSchema.partial().omit({ sshKey: true });
+export const UpdateServerSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  ip: z.string().ip().optional(),
+  sshPort: z.number().int().min(1).max(65535).optional(),
+  sshUser: z.string().min(1).max(100).optional(),
+});
 
 // ─── Domains ──────────────────────────────────────────────────────────────────
 export const CreateDomainSchema = z.object({

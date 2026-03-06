@@ -16,6 +16,9 @@ import { domainRoutes } from './modules/domains/domain.routes.js';
 import { dnsRoutes } from './modules/dns/dns.routes.js';
 import { deploymentRoutes } from './modules/deployments/deployment.routes.js';
 import { monitoringRoutes } from './modules/monitoring/monitoring.routes.js';
+import { billingRoutes } from './modules/billing/billing.routes.js';
+import { adminRoutes } from './modules/admin/admin.routes.js';
+import { maintenanceRoutes } from './modules/maintenance/maintenance.routes.js';
 
 export async function buildApp() {
   const app = Fastify({
@@ -72,12 +75,20 @@ export async function buildApp() {
         code: error.code,
       });
     }
-    // Fastify validation errors
+    // Fastify body schema validation errors → 422
     if (error.validation) {
       return reply.status(422).send({
         success: false,
         error: 'Validation failed',
         details: error.validation,
+      });
+    }
+    // Zod validation errors (controller parse çağrılarından) → 422
+    if (error.name === 'ZodError' && 'issues' in error) {
+      return reply.status(422).send({
+        success: false,
+        error: 'Validation failed',
+        details: (error as unknown as { issues: unknown[] }).issues,
       });
     }
     app.log.error({ err: error }, 'Unhandled error');
@@ -94,6 +105,10 @@ export async function buildApp() {
   await app.register(dnsRoutes, { prefix: '/api/v1/dns' });
   await app.register(deploymentRoutes, { prefix: '/api/v1/deployments' });
   await app.register(monitoringRoutes, { prefix: '/api/v1/monitoring' });
+  await app.register(billingRoutes, { prefix: '/api/v1/billing' });
+  await app.register(adminRoutes,   { prefix: '/api/v1/admin' });
+  await app.register((await import('./modules/technologies/tech.routes.js')).techRoutes, { prefix: '/api/v1/servers' });
+  await app.register(maintenanceRoutes, { prefix: '/api/v1/servers' });
 
   return app;
 }

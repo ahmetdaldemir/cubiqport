@@ -1,0 +1,61 @@
+---
+description: Cubiqport API backend — Fastify, hata yönetimi, servis katmanı kuralları
+globs: apps/api/**/*.ts
+alwaysApply: false
+---
+
+# API Kuralları
+
+## Hata Yönetimi — `new Error()` YASAK
+```typescript
+// ❌ YANLIŞ
+throw new Error('Kullanıcı bulunamadı');
+
+// ✅ DOĞRU — apps/api/src/utils/errors.ts'den import et
+throw new NotFoundError('User');
+throw new ConflictError('Bu e-posta zaten kayıtlı');
+throw new AppError('Geçersiz istek', 400);
+```
+Mevcut sınıflar: `AppError`, `NotFoundError`, `UnauthorizedError`, `ForbiddenError`, `ConflictError`, `ValidationError`, `AgentError`
+
+## Controller — sadece HTTP katmanı
+```typescript
+// ✅ DOĞRU: params/body cast + service çağrısı + reply
+export async function createFoo(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = req.params as { id: string };
+  const body = req.body as CreateFooInput;
+  const data = await service.createFoo(id, body);
+  return reply.status(201).send({ success: true, data });
+}
+// ❌ YANLIŞ: controller içinde DB sorgusu, SSH bağlantısı, iş mantığı
+```
+
+## Route — JSON Schema zorunlu (POST/PUT)
+```typescript
+fastify.post('/foo', {
+  preHandler: [fastify.authenticate],
+  schema: { body: { type: 'object', required: ['name'], properties: { name: { type: 'string' } } } },
+}, handler);
+```
+
+## Config — process.env doğrudan kullanma
+```typescript
+// ❌ process.env.STRIPE_KEY
+// ✅ config.STRIPE_KEY  (apps/api/src/config/index.ts — Zod ile validate edilir)
+```
+
+## DB Sorguları — JS'de filtreleme yasak
+```typescript
+// ❌ const all = await db.select().from(users); all.filter(u => u.active)
+// ✅ await db.select({ total: count() }).from(users).where(eq(users.active, true))
+```
+
+## SSE Endpoint'leri — Query Token Desteği
+`EventSource` tarayıcı API'si custom header gönderemez. SSE stream endpoint'leri `?token=` query string'ini de kabul eder — `auth.plugin.ts` bunu otomatik `Authorization` header'a çevirir. Frontend'de:
+```typescript
+const es = new EventSource(`${API_BASE}/.../stream?token=${localStorage.getItem(AUTH_TOKEN_KEY)}`);
+```
+
+## Pure Helper Fonksiyonlar
+Test edilebilirlik için DB/SSH bağımlısı olmayan saf fonksiyonlar ayrı dosyaya çıkar:
+`billing-helpers.ts`, `ssh-credentials.ts` örneklerine bak.
