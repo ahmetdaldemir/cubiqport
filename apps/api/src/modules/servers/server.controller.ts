@@ -111,8 +111,17 @@ export async function listContainers(
   req: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply,
 ) {
-  const result = await service.listContainers(req.params.id, req.user.sub);
-  return reply.send({ success: true, data: result });
+  try {
+    const result = await service.listContainers(req.params.id, req.user.sub);
+    return reply.send({ success: true, data: result });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const isConnectionError = msg.includes('SSH') || msg.includes('connection') || msg.includes('ECONNREFUSED') || msg.includes('authentication');
+    if (isConnectionError) {
+      return reply.send({ success: true, data: [] });
+    }
+    throw err;
+  }
 }
 
 export async function getContainerLogs(

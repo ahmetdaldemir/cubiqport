@@ -1,12 +1,24 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Header } from '@/components/layout/header';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { PlusIcon, GlobeIcon, ShieldCheckIcon, RefreshCwIcon, ServerIcon, ChevronRightIcon } from 'lucide-react';
+import {
+  PlusIcon,
+  GlobeIcon,
+  ShieldCheckIcon,
+  RefreshCwIcon,
+  ServerIcon,
+  ChevronRightIcon,
+  SearchIcon,
+  ZapIcon,
+  ShieldAlertIcon,
+  Loader2,
+  XIcon,
+} from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import Link from 'next/link';
-import type { Domain } from '@cubiqport/shared';
+import type { Domain, SeoReport, StressTestReport, SecurityScanReport } from '@cubiqport/shared';
 
 function useToken() {
   return typeof window !== 'undefined' ? localStorage.getItem('cubiq_token') ?? '' : '';
@@ -24,12 +36,114 @@ interface ServerGroup {
   domains: Domain[];
 }
 
+type AnalysisType = 'seo' | 'stress' | 'security';
+
+// ─── Result modal (SEO / Stress / Security) ───────────────────────────────────
+function AnalysisResultModal({
+  type,
+  domainName,
+  report,
+  onClose,
+}: {
+  type: AnalysisType;
+  domainName: string;
+  report: SeoReport | StressTestReport | SecurityScanReport;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-lg max-h-[85vh] overflow-hidden rounded-2xl border border-border bg-card shadow-2xl flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-3 border-b border-border">
+          <h2 className="text-base font-semibold">
+            {type === 'seo' && 'SEO Analizi'}
+            {type === 'stress' && 'Stres Testi'}
+            {type === 'security' && 'Güvenlik Taraması'} — {domainName}
+          </h2>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground p-1">
+            <XIcon className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="p-5 overflow-auto space-y-4">
+          {type === 'seo' && (
+            <>
+              <div className="flex items-center gap-2">
+                <span className="text-2xl font-bold text-primary">{(report as SeoReport).seoScore}</span>
+                <span className="text-sm text-muted-foreground">SEO Skoru</span>
+              </div>
+              <div className="grid grid-cols-1 gap-2 text-sm">
+                <p><span className="text-muted-foreground">Başlık:</span> {(report as SeoReport).title ?? '—'}</p>
+                <p><span className="text-muted-foreground">Meta açıklama:</span> {(report as SeoReport).metaDescription ?? '—'}</p>
+                <p><span className="text-muted-foreground">Yükleme süresi:</span> {(report as SeoReport).loadTimeMs} ms</p>
+                <p><span className="text-muted-foreground">Mobil uyumlu:</span> {(report as SeoReport).mobileFriendly ? 'Evet' : 'Hayır'}</p>
+                <p><span className="text-muted-foreground">H1 sayısı:</span> {(report as SeoReport).h1Tags?.length ?? 0}</p>
+                <p><span className="text-muted-foreground">Kırık link:</span> {(report as SeoReport).brokenLinksCount}</p>
+                <p><span className="text-muted-foreground">Sitemap:</span> {(report as SeoReport).sitemapExists ? 'Var' : 'Yok'}</p>
+                <p><span className="text-muted-foreground">Robots.txt:</span> {(report as SeoReport).robotsTxtExists ? 'Var' : 'Yok'}</p>
+              </div>
+            </>
+          )}
+          {type === 'stress' && (
+            <>
+              <div className="flex items-center gap-2">
+                <span className="text-2xl font-bold text-primary">{(report as StressTestReport).requestsPerSecond?.toFixed(1) ?? 0}</span>
+                <span className="text-sm text-muted-foreground">req/s</span>
+              </div>
+              <div className="grid grid-cols-1 gap-2 text-sm">
+                <p><span className="text-muted-foreground">Ort. yanıt süresi:</span> {(report as StressTestReport).avgResponseTimeMs?.toFixed(0) ?? 0} ms</p>
+                <p><span className="text-muted-foreground">Maks. yanıt süresi:</span> {(report as StressTestReport).maxResponseTimeMs?.toFixed(0) ?? 0} ms</p>
+                <p><span className="text-muted-foreground">Hata oranı:</span> {(report as StressTestReport).errorRate?.toFixed(2) ?? 0}%</p>
+                <p><span className="text-muted-foreground">Eşzamanlı kullanıcı:</span> {(report as StressTestReport).concurrentUsers ?? 0}</p>
+                <p><span className="text-muted-foreground">Süre:</span> {(report as StressTestReport).durationSeconds ?? 0} sn</p>
+              </div>
+            </>
+          )}
+          {type === 'security' && (
+            <>
+              <div className="flex items-center gap-2">
+                <span className="text-2xl font-bold text-primary">{(report as SecurityScanReport).securityScore}</span>
+                <span className="text-sm text-muted-foreground">Güvenlik Skoru</span>
+              </div>
+              <div className="grid grid-cols-1 gap-2 text-sm">
+                <p><span className="text-muted-foreground">HTTPS:</span> {(report as SecurityScanReport).httpsEnabled ? 'Aktif' : 'Hayır'}</p>
+                <p><span className="text-muted-foreground">SSL geçerli:</span> {(report as SecurityScanReport).sslValid ? 'Evet' : 'Hayır'}</p>
+                <p><span className="text-muted-foreground">Dizin listeleme:</span> {(report as SecurityScanReport).directoryListingEnabled ? 'Açık' : 'Kapalı'}</p>
+                {(report as SecurityScanReport).vulnerabilities?.length > 0 && (
+                  <div>
+                    <p className="text-muted-foreground mb-1">Tespitler:</p>
+                    <ul className="list-disc list-inside text-xs space-y-0.5">
+                      {(report as SecurityScanReport).vulnerabilities.map((v, i) => (
+                        <li key={i}>{v}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+          <p className="text-xs text-muted-foreground pt-2">
+            {formatDate(String((report as { createdAt: string | Date }).createdAt))}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function DomainsPage() {
   const [groups, setGroups] = useState<ServerGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [totalDomains, setTotalDomains] = useState(0);
   const token = useToken();
+  const [analysisLoading, setAnalysisLoading] = useState<{ domainId: string; type: AnalysisType } | null>(null);
+  const [resultModal, setResultModal] = useState<{
+    type: AnalysisType;
+    domainName: string;
+    report: SeoReport | StressTestReport | SecurityScanReport;
+  } | null>(null);
 
   async function load() {
     setLoading(true);
@@ -74,6 +188,59 @@ export default function DomainsPage() {
   }
 
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const startAnalysis = useCallback(
+    async (domainId: string, domainName: string, type: AnalysisType) => {
+      const headers = { Authorization: `Bearer ${token}` };
+      setAnalysisLoading({ domainId, type });
+      try {
+        const path =
+          type === 'seo' ? 'seo' : type === 'stress' ? 'stress' : 'security';
+        const res = await fetch(`/api/v1/domains/${domainId}/analysis/${path}`, {
+          method: 'POST',
+          headers,
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          setError(json.error ?? 'Analiz başlatılamadı');
+          return;
+        }
+        const prevList: unknown[] = [];
+        const maxWait = 90;
+        const interval = 2;
+        for (let elapsed = 0; elapsed < maxWait; elapsed += interval) {
+          await new Promise((r) => setTimeout(r, interval * 1000));
+          const listRes = await fetch(
+            `/api/v1/domains/${domainId}/analysis/${path}`,
+            { headers },
+          );
+          const listJson = await listRes.json();
+          const list = (listJson.data ?? []) as { id: string; createdAt: string }[];
+          if (list.length > 0) {
+            const latest = list[0];
+            const reportRes = await fetch(
+              `/api/v1/domains/${domainId}/analysis/${path}/${latest.id}`,
+              { headers },
+            );
+            const reportJson = await reportRes.json();
+            if (reportRes.ok && reportJson.data) {
+              setResultModal({
+                type,
+                domainName,
+                report: reportJson.data,
+              });
+            }
+            break;
+          }
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Analiz hatası');
+      } finally {
+        setAnalysisLoading(null);
+      }
+    },
+    [token],
+  );
 
   return (
     <div className="flex flex-col">
@@ -175,34 +342,71 @@ export default function DomainsPage() {
                       <th className="px-5 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">SSL</th>
                       <th className="px-5 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Port</th>
                       <th className="px-5 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Eklenme</th>
+                      <th className="px-5 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">İşlemler</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {domains.map((d) => (
-                      <tr key={d.id} className="transition hover:bg-secondary/30">
-                        <td className="px-5 py-3.5 font-medium">
-                          <Link
-                            href={`/domains/${d.id}`}
-                            className="flex items-center gap-2 hover:text-primary transition-colors"
-                          >
-                            <GlobeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            {d.domain}
-                          </Link>
-                        </td>
-                        <td className="px-5 py-3.5"><StatusBadge status={d.status} /></td>
-                        <td className="px-5 py-3.5">
-                          {d.sslEnabled ? (
-                            <span className="flex items-center gap-1.5 text-green-400 text-xs font-medium">
-                              <ShieldCheckIcon className="h-3.5 w-3.5" /> Aktif
-                            </span>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </td>
-                        <td className="px-5 py-3.5 text-muted-foreground text-xs">:{d.port}</td>
-                        <td className="px-5 py-3.5 text-muted-foreground text-xs">{formatDate(d.createdAt)}</td>
-                      </tr>
-                    ))}
+                    {domains.map((d) => {
+                      const isSeo = analysisLoading?.domainId === d.id && analysisLoading?.type === 'seo';
+                      const isStress = analysisLoading?.domainId === d.id && analysisLoading?.type === 'stress';
+                      const isSecurity = analysisLoading?.domainId === d.id && analysisLoading?.type === 'security';
+                      return (
+                        <tr key={d.id} className="transition hover:bg-secondary/30">
+                          <td className="px-5 py-3.5 font-medium">
+                            <Link
+                              href={`/domains/${d.id}`}
+                              className="flex items-center gap-2 hover:text-primary transition-colors"
+                            >
+                              <GlobeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              {d.domain}
+                            </Link>
+                          </td>
+                          <td className="px-5 py-3.5"><StatusBadge status={d.status} /></td>
+                          <td className="px-5 py-3.5">
+                            {d.sslEnabled ? (
+                              <span className="flex items-center gap-1.5 text-green-400 text-xs font-medium">
+                                <ShieldCheckIcon className="h-3.5 w-3.5" /> Aktif
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3.5 text-muted-foreground text-xs">:{d.port}</td>
+                          <td className="px-5 py-3.5 text-muted-foreground text-xs">{formatDate(d.createdAt)}</td>
+                          <td className="px-5 py-3.5 text-right">
+                            <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                              <button
+                                onClick={() => startAnalysis(d.id, d.domain, 'seo')}
+                                disabled={!!analysisLoading}
+                                className="inline-flex items-center gap-1 rounded-lg border border-border bg-secondary px-2.5 py-1.5 text-xs font-medium hover:bg-secondary/80 disabled:opacity-50 transition"
+                                title="SEO Analizi"
+                              >
+                                {isSeo ? <Loader2 className="h-3 w-3 animate-spin" /> : <SearchIcon className="h-3 w-3" />}
+                                SEO
+                              </button>
+                              <button
+                                onClick={() => startAnalysis(d.id, d.domain, 'stress')}
+                                disabled={!!analysisLoading}
+                                className="inline-flex items-center gap-1 rounded-lg border border-border bg-secondary px-2.5 py-1.5 text-xs font-medium hover:bg-secondary/80 disabled:opacity-50 transition"
+                                title="Stres Testi"
+                              >
+                                {isStress ? <Loader2 className="h-3 w-3 animate-spin" /> : <ZapIcon className="h-3 w-3" />}
+                                Stres
+                              </button>
+                              <button
+                                onClick={() => startAnalysis(d.id, d.domain, 'security')}
+                                disabled={!!analysisLoading}
+                                className="inline-flex items-center gap-1 rounded-lg border border-border bg-secondary px-2.5 py-1.5 text-xs font-medium hover:bg-secondary/80 disabled:opacity-50 transition"
+                                title="Güvenlik Taraması"
+                              >
+                                {isSecurity ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShieldAlertIcon className="h-3 w-3" />}
+                                Güvenlik
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -210,6 +414,15 @@ export default function DomainsPage() {
           </div>
         )}
       </div>
+
+      {resultModal && (
+        <AnalysisResultModal
+          type={resultModal.type}
+          domainName={resultModal.domainName}
+          report={resultModal.report}
+          onClose={() => setResultModal(null)}
+        />
+      )}
     </div>
   );
 }

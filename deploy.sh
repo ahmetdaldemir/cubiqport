@@ -6,11 +6,12 @@
 
 set -euo pipefail
 
-# ── Hardcoded Config ──────────────────────────────────────────────────────────
+# ── Config ────────────────────────────────────────────────────────────────────
 SERVER="root@45.67.203.202"
-PASS="@198711Ad@"
 REMOTE_DIR="/var/www/html"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Şifre: env DEPLOY_SSHPASS='sifre' ./deploy.sh  veya SSH anahtarı kullan (ssh-copy-id)
+PASS="${DEPLOY_SSHPASS:-}"
 
 TARGET="${1:-all}"
 
@@ -21,16 +22,44 @@ success() { echo -e "${GREEN}[  ok  ]${NC} $*"; }
 warn()    { echo -e "${YELLOW}[ warn ]${NC} $*"; }
 error()   { echo -e "${RED}[ fail ]${NC} $*"; exit 1; }
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# ── SSH: anahtar varsa sshpass yok, yoksa sshpass (şifre gerekir) ───────────────
+USE_SSHPASS=false
+if [ -n "$PASS" ]; then
+  USE_SSHPASS=true
+elif ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 "$SERVER" "echo ok" 2>/dev/null | grep -q ok; then
+  USE_SSHPASS=false
+else
+  error "Sunucuya erişim yok. Şifre ile: DEPLOY_SSHPASS='sifren' ./deploy.sh  veya: ssh-copy-id $SERVER"
+fi
+
 ssh_run() {
-  sshpass -p "$PASS" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 "$SERVER" "$@"
+  if [ "$USE_SSHPASS" = true ]; then
+    require_cmd sshpass "brew install hudochenkov/sshpass/sshpass  (macOS)"
+    sshpass -p "$PASS" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 "$SERVER" "$@"
+  else
+    ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 "$SERVER" "$@"
+  fi
 }
 
 rsync_up() {
-  # rsync_up <local_src/> <remote_dest/>
-  sshpass -p "$PASS" rsync -az --delete \
-    -e "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10" \
-    "$1" "$SERVER:$2"
+  if [ "$USE_SSHPASS" = true ]; then
+    require_cmd sshpass "brew install hudochenkov/sshpass/sshpass  (macOS)"
+    sshpass -p "$PASS" rsync -az --delete \
+      -e "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10" \
+      "$1" "$SERVER:$2"
+  else
+    rsync -az --delete -e "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10" "$1" "$SERVER:$2"
+  fi
+}
+
+# Tek dosya/klasör kopyala (--delete yok)
+rsync_copy() {
+  if [ "$USE_SSHPASS" = true ]; then
+    require_cmd sshpass "brew install hudochenkov/sshpass/sshpass  (macOS)"
+    sshpass -p "$PASS" rsync -az -e "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10" "$1" "$SERVER:$2"
+  else
+    rsync -az -e "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10" "$1" "$SERVER:$2"
+  fi
 }
 
 require_cmd() {
@@ -38,7 +67,6 @@ require_cmd() {
 }
 
 # ── Preflight ─────────────────────────────────────────────────────────────────
-require_cmd sshpass "brew install hudochenkov/sshpass/sshpass  (macOS)"
 require_cmd rsync   "brew install rsync  (macOS)"
 require_cmd node    "https://nodejs.org"
 
@@ -82,24 +110,37 @@ deploy_api() {
   rsync_up "$ROOT/apps/api/dist/" "$REMOTE_DIR/apps/api/dist/"
   success "API dist yüklendi"
 
-  info "Upload: apps/api/src/db/migrations → sunucu (db:migrate için)"
+  info "Upload: apps/api/src/db/migrations → sunucu (dist/apps/api/src/db/migrations)"
   ssh_run "mkdir -p $REMOTE_DIR/apps/api/dist/apps/api/src/db/migrations"
   rsync_up "$ROOT/apps/api/src/db/migrations/" "$REMOTE_DIR/apps/api/dist/apps/api/src/db/migrations/"
   success "Migrations yüklendi"
 
   info "Upload: apps/api/package.json → sunucu (yeni bağımlılıklar için)"
-  sshpass -p "$PASS" rsync -az \
-    -e "ssh -o StrictHostKeyChecking=no" \
-    "$ROOT/apps/api/package.json" "$SERVER:$REMOTE_DIR/apps/api/package.json"
+  rsync_copy "$ROOT/apps/api/package.json" "$REMOTE_DIR/apps/api/package.json"
 
   info "npm install: sunucuda yeni paketler kuruluyor"
   ssh_run "cd $REMOTE_DIR && npm install --workspace=apps/api --production=false 2>&1 | tail -3" \
     || warn "npm install başarısız, devam ediliyor"
   success "Sunucu bağımlılıkları güncellendi"
 
-  info "PM2 restart: cubiqport-api"
-  ssh_run "pm2 restart cubiqport-api --update-env" || warn "pm2 restart başarısız, elle kontrol edin"
-  success "API yeniden başlatıldı"
+  info "DB migration çalıştırılıyor (sunucuda)"
+  ssh_run "cd $REMOTE_DIR/apps/api && node --env-file=$REMOTE_DIR/.env dist/apps/api/src/db/migrate.js 2>&1" || warn "Migration başarısız veya zaten uygulanmış"
+  info "0006 (domain analysis) yoksa uygulanıyor"
+  rsync_copy "$ROOT/scripts/run-migration-0006.mjs" "$REMOTE_DIR/scripts/" 2>/dev/null || true
+  ssh_run "cd $REMOTE_DIR && node --env-file=$REMOTE_DIR/.env scripts/run-migration-0006.mjs 2>&1" || warn "0006 zaten uygulanmış veya atlandı"
+  success "Migration tamamlandı"
+
+  info "PM2: ecosystem güncel, worker yoksa ekleniyor"
+  ssh_run "cp $REMOTE_DIR/ecosystem.config.cjs $REMOTE_DIR/ecosystem.config.cjs.bak 2>/dev/null; true"
+  rsync_copy "$ROOT/ecosystem.config.cjs" "$REMOTE_DIR/ecosystem.config.cjs"
+  ssh_run "pm2 restart cubiqport-api --update-env" || warn "pm2 restart API başarısız"
+  if ssh_run "pm2 describe cubiqport-worker 2>/dev/null" | grep -q "status"; then
+    ssh_run "pm2 restart cubiqport-worker --update-env" || true
+  else
+    ssh_run "cd $REMOTE_DIR && pm2 start ecosystem.config.cjs --only cubiqport-worker" || warn "Worker ilk kez eklenemedi"
+  fi
+  ssh_run "pm2 save 2>/dev/null" || true
+  success "API ve Worker güncellendi (worker: pm2 logs cubiqport-worker)"
 
   info "API sağlık kontrolü (127.0.0.1:4000/health)..."
   sleep 3
@@ -110,12 +151,16 @@ deploy_api() {
     warn "API health check başarısız (kod: $HEALTH). Kontrol: pm2 logs cubiqport-api --lines 50"
   fi
 
-  info "Nginx + seed script sunucuya kopyalanıyor"
+  info "Nginx + scripts sunucuya kopyalanıyor"
   ssh_run "mkdir -p $REMOTE_DIR/scripts"
-  sshpass -p "$PASS" rsync -az -e "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10" \
-    "$ROOT/scripts/nginx-cubiqport.conf" "$SERVER:$REMOTE_DIR/scripts/nginx-cubiqport.conf" 2>/dev/null || true
-  sshpass -p "$PASS" rsync -az -e "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10" \
-    "$ROOT/scripts/seed-admin-on-server.mjs" "$SERVER:$REMOTE_DIR/scripts/" 2>/dev/null || true
+  rsync_copy "$ROOT/scripts/nginx-cubiqport.conf" "$REMOTE_DIR/scripts/nginx-cubiqport.conf" 2>/dev/null || true
+  rsync_copy "$ROOT/scripts/seed-admin-on-server.mjs" "$REMOTE_DIR/scripts/" 2>/dev/null || true
+  rsync_copy "$ROOT/scripts/install-redis.sh" "$REMOTE_DIR/scripts/install-redis.sh" 2>/dev/null || true
+  rsync_copy "$ROOT/scripts/fix-502-server.sh" "$REMOTE_DIR/scripts/" 2>/dev/null || true
+  rsync_copy "$ROOT/scripts/nginx-cubiqport-443.conf" "$REMOTE_DIR/scripts/" 2>/dev/null || true
+  rsync_copy "$ROOT/scripts/setup-nginx-once.sh" "$REMOTE_DIR/scripts/" 2>/dev/null || true
+  ssh_run "chmod +x $REMOTE_DIR/scripts/install-redis.sh $REMOTE_DIR/scripts/fix-502-server.sh $REMOTE_DIR/scripts/setup-nginx-once.sh 2>/dev/null; true"
+  success "Scripts yüklendi"
 }
 
 # =============================================================================
@@ -193,16 +238,14 @@ run_smoke_tests() {
   if bash "$ROOT/scripts/smoke-test.sh" \
       "https://cubiqport.com" \
       "https://cubiqport.com" \
-      "info@cubiqport.com" \
-      "@198711Ad@"; then
+      "admin@cubiqport.io" \
+      "Admin1234!"; then
     success "Tüm smoke testler geçti ✓"
   else
     echo ""
-    warn "Bazı smoke testler başarısız! Kontrol listesi:"
-    warn "  1. API logları: ssh $SERVER 'pm2 logs cubiqport-api --lines 50'"
-    warn "  2. Nginx'te /api/ istekleri 127.0.0.1:4000'e yönlenmeli."
-    warn "     Örnek config: $REMOTE_DIR/scripts/nginx-cubiqport.conf"
-    warn "     Uygulama: sunucuda nginx config'i güncelleyip 'nginx -t && systemctl reload nginx'"
+    warn "Bazı smoke testler başarısız (502 = API yanıt vermiyor)."
+    warn "  Sunucuda kontrol et: ssh $SERVER 'curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:4000/health && pm2 list'"
+    warn "  API kapalıysa: pm2 restart cubiqport-api ; pm2 logs cubiqport-api --lines 50"
   fi
 }
 
@@ -257,7 +300,9 @@ echo ""
 ssh_run "pm2 list 2>/dev/null | grep -E 'name|cubiqport'" || true
 
 # ── Smoke testler (api veya all deploy'u sonrasında çalışır)
-if [ "$SKIP_TESTS" != "true" ] && [ "$TARGET" != "shared" ]; then
-  echo ""
-  run_smoke_tests
+if [ "$SKIP_TESTS" != "true" ]; then
+  if [ "$TARGET" != "shared" ]; then
+    echo ""
+    run_smoke_tests
+  fi
 fi

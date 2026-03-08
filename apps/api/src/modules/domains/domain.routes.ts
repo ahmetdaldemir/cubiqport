@@ -11,6 +11,8 @@ import {
   writeFile,
   deleteFile,
   mkdir,
+  getNginxConfig,
+  updateNginxConfig,
   setGithub,
   deploy,
   githubWebhook,
@@ -30,6 +32,10 @@ export async function domainRoutes(fastify: FastifyInstance) {
   fastify.patch<IdParam>('/:id', auth, updateDomain);
   fastify.delete<IdParam>('/:id', auth, deleteDomain);
   fastify.post<IdParam>('/:id/ssl', auth, enableSsl);
+
+  // Nginx config (view / edit)
+  fastify.get<IdParam>('/:id/nginx', auth, getNginxConfig);
+  fastify.put<IdParam>('/:id/nginx', auth, updateNginxConfig);
 
   // File manager
   fastify.get<IdParam & FileBrowseQuery>('/:id/files', auth, listFiles);

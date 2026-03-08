@@ -33,3 +33,11 @@ repository.ts → sadece Drizzle/DB erişimi (gerekirse)
 - Uzun SSH işlemleri **SSE job pattern** ile yapılır → `tech-jobs.ts`
 - `createJob → markRunning → appendLog → finishJob` sırasına uy
 - Frontend SSE'yi `EventSource` + `onmessage` ile tüketir
+
+## Kuyruk ve Worker (Test / Analiz)
+- **Domain analizleri** (SEO, stress test, security scan):
+  - **Redis varsa**: kuyrukta (BullMQ) → worker ayrı process’te işler
+  - **Redis yoksa**: işler API sürecinde inline çalışır (REDIS_URL isteğe bağlı)
+- Redis kullanımı: analiz kuyruğu + canlı metrik önbelleği. Kurulum: `scripts/install-redis.sh` (sunucuda), .env: `REDIS_URL=redis://127.0.0.1:6379`
+- PM2: `cubiqport-worker` Redis yoksa boşta kalır; Redis varsa kuyruğu işler
+- Yeni kuyruk işi: `run-analysis-job.ts` + queue’a ekle + worker’da type dalı

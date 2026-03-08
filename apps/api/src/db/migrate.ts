@@ -28,6 +28,8 @@ async function runMigrations() {
   '0003_servers_password_auth.sql',
   '0004_domains_extra_columns.sql',
   '0005_billing_tables.sql',
+  '0006_domain_analysis_reports.sql',
+  '0007_test_databases.sql',
 ];
 
     for (const file of migrationFiles) {

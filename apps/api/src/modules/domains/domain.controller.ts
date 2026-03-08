@@ -97,6 +97,28 @@ export async function mkdir(
   return reply.send({ success: true });
 }
 
+// ─── Nginx config ─────────────────────────────────────────────────────────────
+
+export async function getNginxConfig(
+  req: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) {
+  const result = await service.getNginxConfig(req.params.id, req.user.sub);
+  return reply.send({ success: true, data: result });
+}
+
+export async function updateNginxConfig(
+  req: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) {
+  const { content } = (req.body as { content: string }) ?? {};
+  if (typeof content !== 'string') {
+    return reply.status(400).send({ success: false, error: 'content is required' });
+  }
+  const result = await service.updateNginxConfig(req.params.id, req.user.sub, content);
+  return reply.send({ success: true, data: result });
+}
+
 // ─── GitHub / Deploy ──────────────────────────────────────────────────────────
 
 export async function setGithub(

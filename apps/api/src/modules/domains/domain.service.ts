@@ -11,7 +11,10 @@ import {
   deleteFileOrDir,
   makeDirectory,
   gitDeploy,
+  createNginxConfigViaSsh,
+  runRemoteCommand,
 } from '../../services/ssh.service.js';
+import { buildSshOptions, type ServerSshFields } from '../../utils/ssh-credentials.js';
 import { decrypt } from '../../utils/encrypt.js';
 import { NotFoundError, ConflictError, AppError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
@@ -61,8 +64,8 @@ export class DomainService {
       status: 'pending',
     });
 
-    // Non-blocking orchestration
-    this.orchestrateDomainSetup(domain.id, server.ip, domain.domain, domain.port, domain.rootPath).catch(
+    // Non-blocking orchestration (Cloudflare DNS + nginx via agent veya SSH fallback)
+    this.orchestrateDomainSetup(domain.id, server, domain.domain, domain.port, domain.rootPath).catch(
       (err) => logger.error({ err, domainId: domain.id }, 'Domain setup failed'),
     );
 
@@ -148,6 +151,34 @@ export class DomainService {
     await makeDirectory(opts, dirPath);
   }
 
+  // ─── Nginx config (sites-available/{domain}.conf) ───────────────────────────────
+  private nginxConfigPath(domainName: string): string {
+    return `/etc/nginx/sites-available/${domainName}.conf`;
+  }
+
+  async getNginxConfig(id: string, userId: string): Promise<{ content: string; path: string }> {
+    const { domain, opts } = await this.getDomainWithServer(id, userId);
+    const path = this.nginxConfigPath(domain.domain);
+    try {
+      const content = await readFileContent(opts, path, 64 * 1024);
+      return { content, path };
+    } catch (err) {
+      throw new NotFoundError('Nginx config dosyası bulunamadı (henüz oluşturulmamış olabilir)');
+    }
+  }
+
+  async updateNginxConfig(id: string, userId: string, content: string): Promise<{ path: string; reloaded: boolean }> {
+    const { domain, opts } = await this.getDomainWithServer(id, userId);
+    const path = this.nginxConfigPath(domain.domain);
+    await writeFileContent(opts, path, content);
+    const test = await runRemoteCommand(opts, 'nginx -t 2>&1');
+    if (test.code !== 0) {
+      throw new AppError(`Nginx config hatası: ${test.stdout || test.stderr}`, 400, 'NGINX_INVALID');
+    }
+    await runRemoteCommand(opts, 'systemctl reload nginx 2>&1 || nginx -s reload 2>&1');
+    return { path, reloaded: true };
+  }
+
   // ─── GitHub Deploy ────────────────────────────────────────────────────────────
 
   async setGithub(
@@ -219,7 +250,7 @@ export class DomainService {
 
   private async orchestrateDomainSetup(
     domainId: string,
-    serverIp: string,
+    server: ServerSshFields,
     domainName: string,
     port: number,
     rootPath: string,
@@ -235,7 +266,7 @@ export class DomainService {
           const record = await cloudflare.createRecord({
             type: 'A',
             name: domainName,
-            content: serverIp,
+            content: server.ip,
             proxied: false,
           });
           await dnsRepo.create({
@@ -243,7 +274,7 @@ export class DomainService {
             cloudflareId: record.id,
             type: 'A',
             name: domainName,
-            content: serverIp,
+            content: server.ip,
             ttl: 1,
             proxied: false,
           });
@@ -254,17 +285,34 @@ export class DomainService {
         logger.info({ domainId }, 'Cloudflare not configured — skipping DNS step');
       }
 
-      // Step 2 — nginx config via agent (optional — skip if agent unreachable)
-      logger.info({ domainId }, 'Creating nginx config via agent');
+      // Step 2 — nginx host: önce agent, başarısızsa SSH ile oluştur
+      logger.info({ domainId }, 'Creating nginx config');
+      let nginxDone = false;
       try {
-        await agentService.createNginxConfig(serverIp, {
+        await agentService.createNginxConfig(server.ip, {
           domain: domainName,
           port,
           rootPath,
           sslEnabled: false,
         });
+        nginxDone = true;
       } catch (agentErr) {
-        logger.warn({ agentErr, domainId }, 'Agent unreachable — nginx config must be created manually');
+        logger.warn({ agentErr, domainId }, 'Agent unreachable — trying nginx via SSH');
+      }
+      if (!nginxDone) {
+        try {
+          await createNginxConfigViaSsh(buildSshOptions(server), {
+            domain: domainName,
+            port,
+            rootPath,
+            sslEnabled: false,
+          });
+          logger.info({ domainId }, 'Nginx config created via SSH');
+        } catch (sshErr) {
+          logger.error({ sshErr, domainId }, 'Nginx config via SSH failed');
+          await domainRepo.updateStatus(domainId, 'error');
+          throw sshErr;
+        }
       }
 
       await domainRepo.updateStatus(domainId, 'active');

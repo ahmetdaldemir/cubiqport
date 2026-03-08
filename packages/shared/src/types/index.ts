@@ -162,6 +162,51 @@ export interface TechStatus {
   defaultVersion?: string;
 }
 
+// ─── Domain Analysis (SEO, Stress, Security) ───────────────────────────────────
+export interface SeoReport {
+  id: string;
+  domainId: string;
+  title: string | null;
+  metaDescription: string | null;
+  h1Tags: string[];
+  loadTimeMs: number;
+  mobileFriendly: boolean;
+  lighthouseScore: number | null;
+  brokenLinksCount: number;
+  sitemapExists: boolean;
+  robotsTxtExists: boolean;
+  seoScore: number;
+  rawData?: Record<string, unknown>;
+  createdAt: Date;
+}
+
+export interface StressTestReport {
+  id: string;
+  domainId: string;
+  requestsPerSecond: number;
+  avgResponseTimeMs: number;
+  maxResponseTimeMs: number;
+  errorRate: number;
+  concurrentUsers: number;
+  durationSeconds: number;
+  rawData?: Record<string, unknown>;
+  createdAt: Date;
+}
+
+export interface SecurityScanReport {
+  id: string;
+  domainId: string;
+  securityScore: number;
+  httpsEnabled: boolean;
+  securityHeaders: Record<string, string>;
+  openPorts: number[];
+  vulnerabilities: string[];
+  sslValid: boolean;
+  directoryListingEnabled: boolean;
+  rawData?: Record<string, unknown>;
+  createdAt: Date;
+}
+
 // ─── API Responses ────────────────────────────────────────────────────────────
 export interface ApiResponse<T = unknown> {
   success: boolean;

@@ -14,6 +14,7 @@ import { AppError } from './utils/errors.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
 import { serverRoutes } from './modules/servers/server.routes.js';
 import { domainRoutes } from './modules/domains/domain.routes.js';
+import { analysisRoutes } from './modules/analysis/analysis.routes.js';
 import { dnsRoutes } from './modules/dns/dns.routes.js';
 import { deploymentRoutes } from './modules/deployments/deployment.routes.js';
 import { monitoringRoutes } from './modules/monitoring/monitoring.routes.js';
@@ -21,6 +22,7 @@ import { billingRoutes } from './modules/billing/billing.routes.js';
 import { adminRoutes } from './modules/admin/admin.routes.js';
 import { maintenanceRoutes } from './modules/maintenance/maintenance.routes.js';
 import { terminalRoutes } from './modules/terminal/terminal.routes.js';
+import { testDatabaseRoutes } from './modules/test-databases/test-database.routes.js';
 
 export async function buildApp() {
   const app = Fastify({
@@ -47,6 +49,20 @@ export async function buildApp() {
       success: false,
       error: 'Too many requests, please slow down.',
     }),
+  });
+
+  // POST/PATCH with application/json + empty body → 400 önleme (test-connection vb.)
+  app.addHook('preParsing', (request, _reply, payload, done) => {
+    const ct = request.headers['content-type'];
+    const cl = request.headers['content-length'];
+    if (
+      ['POST', 'PATCH', 'PUT'].includes(request.method) &&
+      ct?.includes('application/json') &&
+      (cl === '0' || (cl === undefined && !request.headers['transfer-encoding']))
+    ) {
+      delete request.headers['content-type'];
+    }
+    done(null, payload);
   });
 
   // ── Auth ────────────────────────────────────────────────────────────────────
@@ -120,6 +136,7 @@ export async function buildApp() {
   await app.register(authRoutes, { prefix: '/api/v1/auth' });
   await app.register(serverRoutes, { prefix: '/api/v1/servers' });
   await app.register(domainRoutes, { prefix: '/api/v1/domains' });
+  await app.register(analysisRoutes, { prefix: '/api/v1/domains' });
   await app.register(dnsRoutes, { prefix: '/api/v1/dns' });
   await app.register(deploymentRoutes, { prefix: '/api/v1/deployments' });
   await app.register(monitoringRoutes, { prefix: '/api/v1/monitoring' });
@@ -128,6 +145,7 @@ export async function buildApp() {
   await app.register((await import('./modules/technologies/tech.routes.js')).techRoutes, { prefix: '/api/v1/servers' });
   await app.register(maintenanceRoutes, { prefix: '/api/v1/servers' });
   await app.register(terminalRoutes, { prefix: '/api/v1/servers' });
+  await app.register(testDatabaseRoutes, { prefix: '/api/v1/databases' });
 
   return app;
 }

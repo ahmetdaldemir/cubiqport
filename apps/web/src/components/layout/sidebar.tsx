@@ -13,6 +13,7 @@ import {
   ShieldIcon,
   CreditCardIcon,
   UsersIcon,
+  DatabaseIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
@@ -26,6 +27,7 @@ const navItems = [
   { href: '/dns', label: 'DNS', icon: NetworkIcon },
   { href: '/monitoring', label: 'İzleme', icon: ActivityIcon },
   { href: '/billing', label: 'Faturalama', icon: CreditCardIcon },
+  { href: '/databases', label: 'Databases', icon: DatabaseIcon },
 ];
 
 export function Sidebar() {

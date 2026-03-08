@@ -6,7 +6,8 @@ const envSchema = z.object({
   API_HOST: z.string().default('0.0.0.0'),
 
   DATABASE_URL: z.string().url(),
-  REDIS_URL: z.string().url(),
+  /** Redis: kuyruk (BullMQ) ve canlı metrik önbelleği. Yoksa analiz işleri API sürecinde çalışır. */
+  REDIS_URL: z.string().url().optional(),
 
   JWT_SECRET: z.string().min(32),
   JWT_EXPIRES_IN: z.string().default('7d'),
@@ -44,8 +45,13 @@ function parseEnv() {
     const issues = result.error.issues.map((i) => `  ${i.path.join('.')}: ${i.message}`).join('\n');
     throw new Error(`Invalid environment variables:\n${issues}`);
   }
-  return result.data;
+  const data = result.data;
+  if (data.REDIS_URL === '') data.REDIS_URL = undefined;
+  return data;
 }
 
 export const config = parseEnv();
+export function hasRedis(): boolean {
+  return !!config.REDIS_URL?.trim();
+}
 export type Config = typeof config;

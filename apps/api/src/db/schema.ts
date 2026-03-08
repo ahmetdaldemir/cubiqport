@@ -31,6 +31,8 @@ export const deploymentStatusEnum = pgEnum('deployment_status', [
   'cancelled',
 ]);
 export const dnsTypeEnum = pgEnum('dns_type', ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS', 'SRV']);
+export const testDbTypeEnum = pgEnum('test_db_type', ['postgres', 'mysql', 'mongo']);
+export const testDbStatusEnum = pgEnum('test_db_status', ['creating', 'running', 'stopped', 'error']);
 
 // ─── Users ────────────────────────────────────────────────────────────────────
 export const users = pgTable('users', {
@@ -216,12 +218,114 @@ export const webhookEvents = pgTable('webhook_events', {
   index('webhook_events_created_idx').on(t.createdAt),
 ]);
 
+// ─── Domain Analysis Reports ──────────────────────────────────────────────────
+export const seoReports = pgTable(
+  'seo_reports',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    domainId: uuid('domain_id')
+      .notNull()
+      .references(() => domains.id, { onDelete: 'cascade' }),
+    title: varchar('title', { length: 500 }),
+    metaDescription: text('meta_description'),
+    h1Tags: jsonb('h1_tags').$type<string[]>().notNull().default([]),
+    loadTimeMs: integer('load_time_ms').notNull().default(0),
+    mobileFriendly: boolean('mobile_friendly').notNull().default(false),
+    lighthouseScore: integer('lighthouse_score'),
+    brokenLinksCount: integer('broken_links_count').notNull().default(0),
+    sitemapExists: boolean('sitemap_exists').notNull().default(false),
+    robotsTxtExists: boolean('robots_txt_exists').notNull().default(false),
+    seoScore: integer('seo_score').notNull().default(0),
+    rawData: jsonb('raw_data').$type<Record<string, unknown>>(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => [index('seo_reports_domain_id_idx').on(t.domainId), index('seo_reports_created_at_idx').on(t.createdAt)],
+);
+
+export const stressTestReports = pgTable(
+  'stress_test_reports',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    domainId: uuid('domain_id')
+      .notNull()
+      .references(() => domains.id, { onDelete: 'cascade' }),
+    requestsPerSecond: real('requests_per_second').notNull().default(0),
+    avgResponseTimeMs: real('avg_response_time_ms').notNull().default(0),
+    maxResponseTimeMs: real('max_response_time_ms').notNull().default(0),
+    errorRate: real('error_rate').notNull().default(0),
+    concurrentUsers: integer('concurrent_users').notNull().default(0),
+    durationSeconds: integer('duration_seconds').notNull().default(0),
+    rawData: jsonb('raw_data').$type<Record<string, unknown>>(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('stress_test_reports_domain_id_idx').on(t.domainId),
+    index('stress_test_reports_created_at_idx').on(t.createdAt),
+  ],
+);
+
+export const securityScanReports = pgTable(
+  'security_scan_reports',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    domainId: uuid('domain_id')
+      .notNull()
+      .references(() => domains.id, { onDelete: 'cascade' }),
+    securityScore: integer('security_score').notNull().default(0),
+    httpsEnabled: boolean('https_enabled').notNull().default(false),
+    securityHeaders: jsonb('security_headers').$type<Record<string, string>>().notNull().default({}),
+    openPorts: jsonb('open_ports').$type<number[]>().notNull().default([]),
+    vulnerabilities: jsonb('vulnerabilities').$type<string[]>().notNull().default([]),
+    sslValid: boolean('ssl_valid').notNull().default(false),
+    directoryListingEnabled: boolean('directory_listing_enabled').notNull().default(false),
+    rawData: jsonb('raw_data').$type<Record<string, unknown>>(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('security_scan_reports_domain_id_idx').on(t.domainId),
+    index('security_scan_reports_created_at_idx').on(t.createdAt),
+  ],
+);
+
+// ─── Test Databases (dev/test DBs in Docker on user servers) ──────────────────
+export const testDatabases = pgTable(
+  'test_databases',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    serverId: uuid('server_id')
+      .notNull()
+      .references(() => servers.id, { onDelete: 'cascade' }),
+    type: testDbTypeEnum('type').notNull(),
+    name: varchar('name', { length: 100 }).notNull(),
+    host: varchar('host', { length: 255 }).notNull(),
+    port: integer('port').notNull(),
+    username: varchar('username', { length: 100 }).notNull(),
+    password: text('password').notNull(),
+    databaseName: varchar('database_name', { length: 255 }).notNull(),
+    storageLimitMb: integer('storage_limit_mb').notNull().default(100),
+    storageUsedMb: integer('storage_used_mb'),
+    status: testDbStatusEnum('status').notNull().default('creating'),
+    containerName: varchar('container_name', { length: 255 }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('test_databases_user_id_idx').on(t.userId),
+    index('test_databases_server_id_idx').on(t.serverId),
+    index('test_databases_status_idx').on(t.status),
+  ],
+);
+
 // ─── Relations ────────────────────────────────────────────────────────────────
 export const usersRelations = relations(users, ({ many, one }) => ({
   servers: many(servers),
   subscription: one(subscriptions, { fields: [users.id], references: [subscriptions.userId] }),
   billingInfo: one(billingInfo, { fields: [users.id], references: [billingInfo.userId] }),
   invoices: many(invoices),
+  testDatabases: many(testDatabases),
 }));
 
 export const subscriptionsRelations = relations(subscriptions, ({ one }) => ({
@@ -238,12 +342,16 @@ export const serversRelations = relations(servers, ({ one, many }) => ({
   user: one(users, { fields: [servers.userId], references: [users.id] }),
   domains: many(domains),
   metrics: many(metrics),
+  testDatabases: many(testDatabases),
 }));
 
 export const domainsRelations = relations(domains, ({ one, many }) => ({
   server: one(servers, { fields: [domains.serverId], references: [servers.id] }),
   dnsRecords: many(dnsRecords),
   deployments: many(deployments),
+  seoReports: many(seoReports),
+  stressTestReports: many(stressTestReports),
+  securityScanReports: many(securityScanReports),
 }));
 
 export const dnsRecordsRelations = relations(dnsRecords, ({ one }) => ({
@@ -256,6 +364,21 @@ export const deploymentsRelations = relations(deployments, ({ one }) => ({
 
 export const metricsRelations = relations(metrics, ({ one }) => ({
   server: one(servers, { fields: [metrics.serverId], references: [servers.id] }),
+}));
+
+export const seoReportsRelations = relations(seoReports, ({ one }) => ({
+  domain: one(domains, { fields: [seoReports.domainId], references: [domains.id] }),
+}));
+export const stressTestReportsRelations = relations(stressTestReports, ({ one }) => ({
+  domain: one(domains, { fields: [stressTestReports.domainId], references: [domains.id] }),
+}));
+export const securityScanReportsRelations = relations(securityScanReports, ({ one }) => ({
+  domain: one(domains, { fields: [securityScanReports.domainId], references: [domains.id] }),
+}));
+
+export const testDatabasesRelations = relations(testDatabases, ({ one }) => ({
+  user: one(users, { fields: [testDatabases.userId], references: [users.id] }),
+  server: one(servers, { fields: [testDatabases.serverId], references: [servers.id] }),
 }));
 
 // webhookEvents has no FK relations — standalone table
@@ -281,3 +404,11 @@ export type Invoice = typeof invoices.$inferSelect;
 export type NewInvoice = typeof invoices.$inferInsert;
 export type WebhookEvent = typeof webhookEvents.$inferSelect;
 export type NewWebhookEvent = typeof webhookEvents.$inferInsert;
+export type SeoReportRow = typeof seoReports.$inferSelect;
+export type NewSeoReportRow = typeof seoReports.$inferInsert;
+export type StressTestReportRow = typeof stressTestReports.$inferSelect;
+export type NewStressTestReportRow = typeof stressTestReports.$inferInsert;
+export type SecurityScanReportRow = typeof securityScanReports.$inferSelect;
+export type NewSecurityScanReportRow = typeof securityScanReports.$inferInsert;
+export type TestDatabase = typeof testDatabases.$inferSelect;
+export type NewTestDatabase = typeof testDatabases.$inferInsert;

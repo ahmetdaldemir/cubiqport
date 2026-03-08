@@ -1,3 +1,4 @@
+import { Client as SSH2Client } from 'ssh2';
 import { NodeSSH } from 'node-ssh';
 import { logger } from '../utils/logger.js';
 import { AppError } from '../utils/errors.js';
@@ -34,9 +35,13 @@ export function buildConnectConfig(opts: SshConnectionOptions) {
 
 /**
  * Tests an SSH connection by running a simple command.
- * Throws AppError if the connection fails.
+ * Şifre ile bağlantıda ssh2 Client doğrudan kullanılır (node-ssh atlanır).
  */
 export async function testSshConnection(opts: SshConnectionOptions): Promise<void> {
+  if (opts.password) {
+    await testSshConnectionWithSsh2(opts);
+    return;
+  }
   const ssh = new NodeSSH();
   try {
     await ssh.connect(buildConnectConfig(opts));
@@ -47,10 +52,48 @@ export async function testSshConnection(opts: SshConnectionOptions): Promise<voi
   } catch (err) {
     if (err instanceof AppError) throw err;
     const message = err instanceof Error ? err.message : String(err);
-    throw new AppError(`SSH connection failed: ${message}`, 502, 'SSH_ERROR');
+    const hint = String(message).includes('All configured authentication methods failed')
+      ? ' Paneldeki şifrenin sunucudaki SSH şifresiyle aynı olduğundan ve bağlantının CubiqPort sunucusundan (45.67.203.202) hedef sunucuya izin verildiğinden emin olun.'
+      : '';
+    throw new AppError(`SSH connection failed: ${message}${hint}`, 502, 'SSH_ERROR');
   } finally {
     ssh.dispose();
   }
+}
+
+function testSshConnectionWithSsh2(opts: SshConnectionOptions): Promise<void> {
+  const config = buildConnectConfig(opts);
+  return new Promise((resolve, reject) => {
+    const conn = new SSH2Client();
+    conn.on('ready', () => {
+      conn.exec('echo ok', (err, stream) => {
+        if (err) {
+          conn.end();
+          reject(new AppError(`SSH exec failed: ${err.message}`, 502, 'SSH_ERROR'));
+          return;
+        }
+        let out = '';
+        stream.on('data', (d: Buffer) => { out += d.toString(); });
+        stream.stderr?.on('data', (d: Buffer) => { out += d.toString(); });
+        stream.on('close', (code: number) => {
+          conn.end();
+          if (code !== 0 || out.trim() !== 'ok') {
+            reject(new AppError('SSH test command failed', 502, 'SSH_ERROR'));
+          } else {
+            resolve();
+          }
+        });
+      });
+    });
+    conn.on('error', (err: Error) => {
+      const msg = err.message || '';
+      const hint = msg.includes('All configured authentication methods failed')
+        ? ' Paneldeki şifrenin sunucudaki SSH şifresiyle aynı olduğundan ve bağlantının CubiqPort sunucusundan (45.67.203.202) hedef sunucuya izin verildiğinden emin olun.'
+        : '';
+      reject(new AppError(`SSH connection failed: ${msg}${hint}`, 502, 'SSH_ERROR'));
+    });
+    conn.connect(config);
+  });
 }
 
 export interface CommandResult {
@@ -714,6 +757,80 @@ export async function makeDirectory(
   }
 }
 
+/** Agent erişilemezse domain eklendiğinde SSH ile nginx host oluşturur (sites-available, symlink, reload). */
+export interface NginxCreatePayload {
+  domain: string;
+  port: number;
+  rootPath: string;
+  sslEnabled?: boolean;
+}
+
+function renderNginxServerBlock(cfg: NginxCreatePayload): string {
+  const serverNames = `${cfg.domain} www.${cfg.domain}`;
+  const sslBlock = cfg.sslEnabled
+    ? `
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    ssl_certificate     /etc/letsencrypt/live/${cfg.domain}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${cfg.domain}/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+`
+    : '';
+  const redirectBlock = cfg.sslEnabled
+    ? `server { listen 80; listen [::]:80; server_name ${serverNames}; return 301 https://$host$request_uri; }\n`
+    : '';
+  return `${redirectBlock}server {
+    ${cfg.sslEnabled ? '' : 'listen 80; listen [::]:80;'}
+    ${sslBlock}
+    server_name ${serverNames};
+    root ${cfg.rootPath};
+    index index.html;
+    access_log /var/log/nginx/${cfg.domain}.access.log;
+    error_log  /var/log/nginx/${cfg.domain}.error.log;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    location / {
+        proxy_pass http://127.0.0.1:${cfg.port};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+    location /.well-known/acme-challenge/ { root /var/www/html; }
+}\n`;
+}
+
+export async function createNginxConfigViaSsh(
+  opts: SshConnectionOptions,
+  payload: NginxCreatePayload,
+): Promise<void> {
+  const ssh = new NodeSSH();
+  try {
+    await ssh.connect(buildConnectConfig(opts));
+    const configPath = `/etc/nginx/sites-available/${payload.domain}.conf`;
+    const enabledPath = `/etc/nginx/sites-enabled/${payload.domain}.conf`;
+    const content = renderNginxServerBlock(payload);
+    const encoded = Buffer.from(content).toString('base64');
+    let res = await ssh.execCommand(
+      `echo ${JSON.stringify(encoded)} | base64 -d | tee ${JSON.stringify(configPath)} > /dev/null`,
+    );
+    if (res.code !== 0) throw new AppError(res.stderr || 'Nginx config yazılamadı', 502, 'NGINX_ERROR');
+    res = await ssh.execCommand(`mkdir -p ${JSON.stringify(payload.rootPath)}`);
+    if (res.code !== 0) logger.warn({ stderr: res.stderr }, 'rootPath mkdir failed');
+    res = await ssh.execCommand(`ln -sf ${JSON.stringify(configPath)} ${JSON.stringify(enabledPath)}`);
+    if (res.code !== 0) throw new AppError('Nginx site enable edilemedi', 502, 'NGINX_ERROR');
+    res = await ssh.execCommand('nginx -t 2>&1');
+    if (res.code !== 0) throw new AppError(`Nginx config hatası: ${res.stdout || res.stderr}`, 502, 'NGINX_ERROR');
+    res = await ssh.execCommand('systemctl reload nginx 2>&1 || nginx -s reload 2>&1');
+    if (res.code !== 0) logger.warn({ stderr: res.stderr }, 'Nginx reload failed');
+  } finally {
+    ssh.dispose();
+  }
+}
+
 // ─── Git Deploy ───────────────────────────────────────────────────────────────
 
 export async function gitDeploy(
@@ -903,6 +1020,76 @@ export async function removeContainer(
     const res = await ssh.execCommand(`docker rm ${flag} ${JSON.stringify(containerName)} 2>&1`);
     if ((res.code ?? 0) !== 0) {
       throw new AppError(`Remove failed: ${res.stderr}`, 500);
+    }
+  } finally {
+    ssh.dispose();
+  }
+}
+
+// ─── Test Database containers (PostgreSQL, MySQL, MongoDB) ─────────────────────
+export type TestDbType = 'postgres' | 'mysql' | 'mongo';
+
+const TEST_DB_IMAGES: Record<TestDbType, string> = {
+  postgres: 'postgres:16',
+  mysql: 'mysql:8',
+  mongo: 'mongo:7',
+};
+
+export interface CreateTestDbContainerOptions {
+  type: TestDbType;
+  containerName: string;
+  port: number;
+  username: string;
+  password: string;
+  databaseName: string;
+  storageLimitMb: number;
+}
+
+export async function createTestDbContainer(
+  opts: SshConnectionOptions,
+  params: CreateTestDbContainerOptions,
+): Promise<void> {
+  const ssh = new NodeSSH();
+  try {
+    await ssh.connect(buildConnectConfig(opts));
+    const { type, containerName, port, username, password, databaseName, storageLimitMb } = params;
+    const image = TEST_DB_IMAGES[type];
+    const volName = `${containerName}-data`;
+
+    let runCmd: string;
+    if (type === 'postgres') {
+      runCmd = `docker run -d --restart unless-stopped --name ${JSON.stringify(containerName)} \
+  -p ${port}:5432 \
+  -e POSTGRES_USER=${JSON.stringify(username)} \
+  -e POSTGRES_PASSWORD=${JSON.stringify(password)} \
+  -e POSTGRES_DB=${JSON.stringify(databaseName)} \
+  -v ${JSON.stringify(volName)}:/var/lib/postgresql/data \
+  ${image}`;
+    } else if (type === 'mysql') {
+      runCmd = `docker run -d --restart unless-stopped --name ${JSON.stringify(containerName)} \
+  -p ${port}:3306 \
+  -e MYSQL_ROOT_PASSWORD=${JSON.stringify(password)} \
+  -e MYSQL_DATABASE=${JSON.stringify(databaseName)} \
+  -e MYSQL_USER=${JSON.stringify(username)} \
+  -e MYSQL_PASSWORD=${JSON.stringify(password)} \
+  -v ${JSON.stringify(volName)}:/var/lib/mysql \
+  ${image}`;
+    } else {
+      runCmd = `docker run -d --restart unless-stopped --name ${JSON.stringify(containerName)} \
+  -p ${port}:27017 \
+  -e MONGO_INITDB_ROOT_USERNAME=${JSON.stringify(username)} \
+  -e MONGO_INITDB_ROOT_PASSWORD=${JSON.stringify(password)} \
+  -v ${JSON.stringify(volName)}:/data/db \
+  ${image}`;
+    }
+
+    const res = await ssh.execCommand(`docker volume create ${JSON.stringify(volName)} 2>&1`);
+    if (res.code !== 0 && !res.stderr?.includes('already exists')) {
+      logger.warn({ stderr: res.stderr }, 'Volume create warning');
+    }
+    const runRes = await ssh.execCommand(runCmd);
+    if ((runRes.code ?? 0) !== 0) {
+      throw new AppError(`Container start failed: ${runRes.stderr || runRes.stdout}`, 500, 'DOCKER_ERROR');
     }
   } finally {
     ssh.dispose();

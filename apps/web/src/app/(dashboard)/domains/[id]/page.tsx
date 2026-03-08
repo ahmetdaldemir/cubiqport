@@ -25,6 +25,10 @@ import {
   Loader2,
   FolderOpenIcon,
   FileTextIcon,
+  SearchIcon,
+  ZapIcon,
+  ShieldAlertIcon,
+  FileCodeIcon,
 } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -46,15 +50,19 @@ interface FileEntry {
 }
 
 // ─── Tab types ────────────────────────────────────────────────────────────────
-type Tab = 'overview' | 'files' | 'dns' | 'subdomains' | 'github' | 'email';
+type Tab = 'overview' | 'files' | 'nginx' | 'dns' | 'subdomains' | 'github' | 'email' | 'seo' | 'stress' | 'security';
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-  { id: 'overview',   label: 'Genel Bakış',  icon: <GlobeIcon className="h-4 w-4" /> },
-  { id: 'files',      label: 'Dosyalar',      icon: <FolderIcon className="h-4 w-4" /> },
-  { id: 'github',     label: 'GitHub & Deploy', icon: <GitBranchIcon className="h-4 w-4" /> },
-  { id: 'dns',        label: 'DNS',           icon: <NetworkIcon className="h-4 w-4" /> },
-  { id: 'subdomains', label: 'Subdomainler',  icon: <ServerIcon className="h-4 w-4" /> },
-  { id: 'email',      label: 'E-Posta',       icon: <MailIcon className="h-4 w-4" /> },
+  { id: 'overview',   label: 'Genel Bakış',     icon: <GlobeIcon className="h-4 w-4" /> },
+  { id: 'files',      label: 'Dosyalar',         icon: <FolderIcon className="h-4 w-4" /> },
+  { id: 'nginx',      label: 'Nginx',            icon: <FileCodeIcon className="h-4 w-4" /> },
+  { id: 'github',     label: 'GitHub & Deploy',   icon: <GitBranchIcon className="h-4 w-4" /> },
+  { id: 'seo',        label: 'SEO Raporları',    icon: <SearchIcon className="h-4 w-4" /> },
+  { id: 'stress',     label: 'Stres Testleri',   icon: <ZapIcon className="h-4 w-4" /> },
+  { id: 'security',  label: 'Güvenlik Taramaları', icon: <ShieldAlertIcon className="h-4 w-4" /> },
+  { id: 'dns',        label: 'DNS',              icon: <NetworkIcon className="h-4 w-4" /> },
+  { id: 'subdomains', label: 'Subdomainler',    icon: <ServerIcon className="h-4 w-4" /> },
+  { id: 'email',      label: 'E-Posta',          icon: <MailIcon className="h-4 w-4" /> },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -469,6 +477,103 @@ function FilesTab({ domain, token }: { domain: Domain; token: string }) {
   );
 }
 
+// ─── Nginx Tab ─────────────────────────────────────────────────────────────────
+function NginxTab({ domain, token }: { domain: Domain; token: string }) {
+  const [content, setContent] = useState('');
+  const [path, setPath] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [error, setError] = useState('');
+  const headers = { Authorization: `Bearer ${token}` };
+
+  const load = useCallback(async () => {
+    setLoading(true); setError(''); setMsg('');
+    const res = await fetch(`/api/v1/domains/${domain.id}/nginx`, { headers });
+    const j = await res.json();
+    if (res.ok) {
+      setContent(j.data?.content ?? '');
+      setPath(j.data?.path ?? '');
+    } else {
+      setError(j.error ?? 'Nginx config yüklenemedi');
+      setContent('');
+    }
+    setLoading(false);
+  }, [domain.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function save() {
+    setSaving(true); setMsg(''); setError('');
+    const res = await fetch(`/api/v1/domains/${domain.id}/nginx`, {
+      method: 'PUT',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+    });
+    const j = await res.json();
+    if (res.ok) {
+      setMsg('Kaydedildi ve nginx yeniden yüklendi.');
+      setPath(j.data?.path ?? path);
+    } else {
+      setError(j.error ?? 'Kaydetme başarısız');
+    }
+    setSaving(false);
+  }
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-10">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {msg && (
+        <div className="rounded-lg bg-green-500/10 border border-green-500/30 px-4 py-3 text-sm text-green-400">
+          {msg}
+        </div>
+      )}
+      {error && (
+        <div className="rounded-lg bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+      {path && (
+        <p className="text-xs text-muted-foreground font-mono">
+          Sunucu yolu: {path}
+        </p>
+      )}
+      {content === '' && error ? (
+        <p className="text-sm text-muted-foreground">
+          Bu domain için nginx konfigürasyonu henüz oluşturulmamış. Domain eklendiğinde otomatik oluşturulur; sunucuda manuel oluşturduysanız dosya yolu <code className="bg-secondary px-1 rounded">/etc/nginx/sites-available/{domain.domain}.conf</code> olmalıdır.
+        </p>
+      ) : (
+        <>
+          <div className="flex items-center justify-end">
+            <button
+              onClick={save}
+              disabled={saving}
+              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <SaveIcon className="h-4 w-4" />}
+              Kaydet ve Nginx yeniden yükle
+            </button>
+          </div>
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            spellCheck={false}
+            className="w-full min-h-[400px] rounded-xl border border-border bg-secondary/50 p-4 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary resize-y"
+            placeholder="Nginx server block..."
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── GitHub Tab ───────────────────────────────────────────────────────────────
 function GithubTab({ domain, token, reload }: { domain: Domain; token: string; reload: () => void }) {
   const [repo, setRepo] = useState(domain.githubRepo ?? '');
@@ -691,6 +796,252 @@ function SubdomainsTab({ domain, token }: { domain: Domain; token: string }) {
   );
 }
 
+// ─── SEO Reports Tab ─────────────────────────────────────────────────────────
+function SeoReportsTab({ domain, token, reload }: { domain: Domain; token: string; reload: () => void }) {
+  const [list, setList] = useState<{ id: string; seoScore: number; createdAt: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [running, setRunning] = useState(false);
+  const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
+  const headers = { Authorization: `Bearer ${token}` };
+
+  const loadList = useCallback(async () => {
+    const res = await fetch(`/api/v1/domains/${domain.id}/analysis/seo`, { headers });
+    const j = await res.json();
+    if (res.ok) setList(j.data ?? []);
+    setLoading(false);
+  }, [domain.id]);
+
+  useEffect(() => { setLoading(true); loadList(); }, [loadList]);
+
+  async function runNew() {
+    setRunning(true);
+    try {
+      await fetch(`/api/v1/domains/${domain.id}/analysis/seo`, { method: 'POST', headers });
+      await loadList();
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  async function openReport(id: string) {
+    const res = await fetch(`/api/v1/domains/${domain.id}/analysis/seo/${id}`, { headers });
+    const j = await res.json();
+    if (res.ok) setSelected(j.data);
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">{list.length} rapor</p>
+        <button
+          onClick={runNew}
+          disabled={running}
+          className="flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+        >
+          {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <SearchIcon className="h-3.5 w-3.5" />}
+          Yeni SEO Analizi
+        </button>
+      </div>
+      {loading ? (
+        <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+      ) : list.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
+          Henüz SEO raporu yok. &quot;Yeni SEO Analizi&quot; ile başlatın (arka planda çalışır).
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-border">
+          <table className="w-full text-sm">
+            <thead><tr className="border-b border-border bg-secondary/30"><th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Skor</th><th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Tarih</th><th className="px-4 py-2.5 text-right text-xs font-medium text-muted-foreground">İşlem</th></tr></thead>
+            <tbody className="divide-y divide-border">
+              {list.map((r) => (
+                <tr key={r.id} className="hover:bg-secondary/20">
+                  <td className="px-4 py-3 font-semibold">{r.seoScore}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{new Date(r.createdAt).toLocaleString('tr-TR')}</td>
+                  <td className="px-4 py-3 text-right"><button onClick={() => openReport(r.id)} className="text-primary hover:underline text-xs">Görüntüle</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setSelected(null)}>
+          <div className="w-full max-w-lg max-h-[85vh] overflow-auto rounded-2xl border border-border bg-card p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between mb-3"><h3 className="font-semibold">SEO Raporu</h3><button onClick={() => setSelected(null)}><XIcon className="h-4 w-4" /></button></div>
+            <p><span className="text-muted-foreground">Skor:</span> {(selected as { seoScore?: number }).seoScore}</p>
+            <p><span className="text-muted-foreground">Başlık:</span> {(selected as { title?: string }).title ?? '—'}</p>
+            <p><span className="text-muted-foreground">Meta:</span> {(selected as { metaDescription?: string }).metaDescription ?? '—'}</p>
+            <p><span className="text-muted-foreground">Yükleme:</span> {(selected as { loadTimeMs?: number }).loadTimeMs} ms</p>
+            <p><span className="text-muted-foreground">Mobil:</span> {(selected as { mobileFriendly?: boolean }).mobileFriendly ? 'Evet' : 'Hayır'}</p>
+            <p><span className="text-muted-foreground">Kırık link:</span> {(selected as { brokenLinksCount?: number }).brokenLinksCount}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Stress Tests Tab ─────────────────────────────────────────────────────────
+function StressTestsTab({ domain, token }: { domain: Domain; token: string }) {
+  const [list, setList] = useState<{ id: string; requestsPerSecond: number; avgResponseTimeMs: number; errorRate: number; createdAt: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [running, setRunning] = useState(false);
+  const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
+  const headers = { Authorization: `Bearer ${token}` };
+
+  const loadList = useCallback(async () => {
+    const res = await fetch(`/api/v1/domains/${domain.id}/analysis/stress`, { headers });
+    const j = await res.json();
+    if (res.ok) setList(j.data ?? []);
+    setLoading(false);
+  }, [domain.id]);
+
+  useEffect(() => { setLoading(true); loadList(); }, [loadList]);
+
+  async function runNew() {
+    setRunning(true);
+    try {
+      await fetch(`/api/v1/domains/${domain.id}/analysis/stress`, { method: 'POST', headers });
+      await loadList();
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  async function openReport(id: string) {
+    const res = await fetch(`/api/v1/domains/${domain.id}/analysis/stress/${id}`, { headers });
+    const j = await res.json();
+    if (res.ok) setSelected(j.data);
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">{list.length} rapor</p>
+        <button onClick={runNew} disabled={running} className="flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
+          {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ZapIcon className="h-3.5 w-3.5" />}
+          Yeni Stres Testi
+        </button>
+      </div>
+      {loading ? (
+        <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+      ) : list.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">Henüz stres testi yok.</div>
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-border">
+          <table className="w-full text-sm">
+            <thead><tr className="border-b border-border bg-secondary/30"><th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">req/s</th><th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Ort. ms</th><th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Hata %</th><th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Tarih</th><th className="px-4 py-2.5 text-right text-xs font-medium text-muted-foreground">İşlem</th></tr></thead>
+            <tbody className="divide-y divide-border">
+              {list.map((r) => (
+                <tr key={r.id} className="hover:bg-secondary/20">
+                  <td className="px-4 py-3 font-semibold">{Number(r.requestsPerSecond).toFixed(1)}</td>
+                  <td className="px-4 py-3">{Number(r.avgResponseTimeMs).toFixed(0)}</td>
+                  <td className="px-4 py-3">{Number(r.errorRate).toFixed(2)}%</td>
+                  <td className="px-4 py-3 text-muted-foreground">{new Date(r.createdAt).toLocaleString('tr-TR')}</td>
+                  <td className="px-4 py-3 text-right"><button onClick={() => openReport(r.id)} className="text-primary hover:underline text-xs">Görüntüle</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setSelected(null)}>
+          <div className="w-full max-w-lg max-h-[85vh] overflow-auto rounded-2xl border border-border bg-card p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between mb-3"><h3 className="font-semibold">Stres Testi</h3><button onClick={() => setSelected(null)}><XIcon className="h-4 w-4" /></button></div>
+            <p><span className="text-muted-foreground">req/s:</span> {(selected as { requestsPerSecond?: number }).requestsPerSecond?.toFixed(1)}</p>
+            <p><span className="text-muted-foreground">Ort. yanıt:</span> {(selected as { avgResponseTimeMs?: number }).avgResponseTimeMs?.toFixed(0)} ms</p>
+            <p><span className="text-muted-foreground">Maks:</span> {(selected as { maxResponseTimeMs?: number }).maxResponseTimeMs?.toFixed(0)} ms</p>
+            <p><span className="text-muted-foreground">Hata oranı:</span> {(selected as { errorRate?: number }).errorRate?.toFixed(2)}%</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Security Scans Tab ───────────────────────────────────────────────────────
+function SecurityScansTab({ domain, token }: { domain: Domain; token: string }) {
+  const [list, setList] = useState<{ id: string; securityScore: number; httpsEnabled: boolean; createdAt: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [running, setRunning] = useState(false);
+  const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
+  const headers = { Authorization: `Bearer ${token}` };
+
+  const loadList = useCallback(async () => {
+    const res = await fetch(`/api/v1/domains/${domain.id}/analysis/security`, { headers });
+    const j = await res.json();
+    if (res.ok) setList(j.data ?? []);
+    setLoading(false);
+  }, [domain.id]);
+
+  useEffect(() => { setLoading(true); loadList(); }, [loadList]);
+
+  async function runNew() {
+    setRunning(true);
+    try {
+      await fetch(`/api/v1/domains/${domain.id}/analysis/security`, { method: 'POST', headers });
+      await loadList();
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  async function openReport(id: string) {
+    const res = await fetch(`/api/v1/domains/${domain.id}/analysis/security/${id}`, { headers });
+    const j = await res.json();
+    if (res.ok) setSelected(j.data);
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">{list.length} rapor</p>
+        <button onClick={runNew} disabled={running} className="flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
+          {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldAlertIcon className="h-3.5 w-3.5" />}
+          Yeni Güvenlik Taraması
+        </button>
+      </div>
+      {loading ? (
+        <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+      ) : list.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">Henüz güvenlik taraması yok.</div>
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-border">
+          <table className="w-full text-sm">
+            <thead><tr className="border-b border-border bg-secondary/30"><th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Skor</th><th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">HTTPS</th><th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Tarih</th><th className="px-4 py-2.5 text-right text-xs font-medium text-muted-foreground">İşlem</th></tr></thead>
+            <tbody className="divide-y divide-border">
+              {list.map((r) => (
+                <tr key={r.id} className="hover:bg-secondary/20">
+                  <td className="px-4 py-3 font-semibold">{r.securityScore}</td>
+                  <td className="px-4 py-3">{r.httpsEnabled ? 'Evet' : 'Hayır'}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{new Date(r.createdAt).toLocaleString('tr-TR')}</td>
+                  <td className="px-4 py-3 text-right"><button onClick={() => openReport(r.id)} className="text-primary hover:underline text-xs">Görüntüle</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setSelected(null)}>
+          <div className="w-full max-w-lg max-h-[85vh] overflow-auto rounded-2xl border border-border bg-card p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between mb-3"><h3 className="font-semibold">Güvenlik Taraması</h3><button onClick={() => setSelected(null)}><XIcon className="h-4 w-4" /></button></div>
+            <p><span className="text-muted-foreground">Skor:</span> {(selected as { securityScore?: number }).securityScore}</p>
+            <p><span className="text-muted-foreground">HTTPS:</span> {(selected as { httpsEnabled?: boolean }).httpsEnabled ? 'Evet' : 'Hayır'}</p>
+            <p><span className="text-muted-foreground">SSL geçerli:</span> {(selected as { sslValid?: boolean }).sslValid ? 'Evet' : 'Hayır'}</p>
+            {((selected as { vulnerabilities?: string[] }).vulnerabilities?.length ?? 0) > 0 && (
+              <p className="mt-2"><span className="text-muted-foreground">Tespitler:</span><br />
+                <span className="text-xs">{(selected as { vulnerabilities?: string[] }).vulnerabilities?.join(', ') ?? ''}</span>
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Email Tab ────────────────────────────────────────────────────────────────
 function EmailTab({ domain }: { domain: Domain }) {
   return (
@@ -814,7 +1165,11 @@ export default function DomainDetailPage() {
         <div>
           {tab === 'overview'   && <OverviewTab   domain={domain} token={token} reload={load} />}
           {tab === 'files'      && <FilesTab      domain={domain} token={token} />}
+          {tab === 'nginx'      && <NginxTab      domain={domain} token={token} />}
           {tab === 'github'     && <GithubTab     domain={domain} token={token} reload={load} />}
+          {tab === 'seo'        && <SeoReportsTab domain={domain} token={token} reload={load} />}
+          {tab === 'stress'     && <StressTestsTab domain={domain} token={token} />}
+          {tab === 'security'  && <SecurityScansTab domain={domain} token={token} />}
           {tab === 'dns'        && <DnsTab        domain={domain} />}
           {tab === 'subdomains' && <SubdomainsTab domain={domain} token={token} />}
           {tab === 'email'      && <EmailTab      domain={domain} />}

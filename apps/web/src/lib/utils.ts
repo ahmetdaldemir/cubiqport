@@ -51,6 +51,8 @@ export function statusBg(status: string): string {
     failed: 'bg-red-500/10 text-red-400 border-red-500/20',
     offline: 'bg-gray-500/10 text-gray-400 border-gray-500/20',
     cancelled: 'bg-gray-500/10 text-gray-400 border-gray-500/20',
+    creating: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
+    stopped: 'bg-gray-500/10 text-gray-400 border-gray-500/20',
   };
   return map[status] ?? 'bg-gray-500/10 text-gray-400 border-gray-500/20';
 }

@@ -96,6 +96,13 @@ export const AgentSslSchema = z.object({
   email: z.string().email(),
 });
 
+// ─── Test Databases (dev/test DBs in Docker) ────────────────────────────────────
+export const CreateTestDatabaseSchema = z.object({
+  serverId: z.string().uuid(),
+  type: z.enum(['postgres', 'mysql', 'mongo']),
+  name: z.string().min(1).max(100),
+});
+
 export type LoginInput = z.infer<typeof LoginSchema>;
 export type RegisterInput = z.infer<typeof RegisterSchema>;
 export type CreateServerInput = z.infer<typeof CreateServerSchema>;
@@ -104,3 +111,4 @@ export type CreateDomainInput = z.infer<typeof CreateDomainSchema>;
 export type UpdateDomainInput = z.infer<typeof UpdateDomainSchema>;
 export type CreateDnsRecordInput = z.infer<typeof CreateDnsRecordSchema>;
 export type CreateDeploymentInput = z.infer<typeof CreateDeploymentSchema>;
+export type CreateTestDatabaseInput = z.infer<typeof CreateTestDatabaseSchema>;
