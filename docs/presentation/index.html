@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CubiqPort — Sunucu Orkestrasyon Platformu</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0c0f14;
+      --surface: #151a22;
+      --border: #2a3140;
+      --text: #e6eaf0;
+      --muted: #8b95a8;
+      --accent: #3b82f6;
+      --accent-dim: #2563eb;
+      --success: #22c55e;
+      --warning: #eab308;
+      --radius: 12px;
+      --font-sans: 'DM Sans', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+      overflow-x: hidden;
+      scroll-snap-type: y mandatory;
+    }
+
+    .slide {
+      min-height: 100vh;
+      padding: 3rem 4rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      scroll-snap-align: start;
+    }
+    .slide-content { max-width: 900px; margin: 0 auto; width: 100%; }
+    .slide-num {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 2rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    h1 {
+      font-size: clamp(2.25rem, 5vw, 3.5rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.5rem;
+      background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    h2 {
+      font-size: clamp(1.5rem, 3vw, 2rem);
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 1.5rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    h3 { font-size: 1.15rem; font-weight: 600; color: var(--text); margin-bottom: 0.75rem; }
+    p { color: var(--muted); margin-bottom: 1rem; }
+    .lead { font-size: 1.2rem; color: var(--text); }
+    ul { margin: 0 0 1rem 1.5rem; color: var(--muted); }
+    li { margin-bottom: 0.35rem; }
+    code, .mono {
+      font-family: var(--font-mono);
+      font-size: 0.9em;
+      background: var(--surface);
+      color: var(--accent);
+      padding: 0.15em 0.4em;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    pre {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      overflow-x: auto;
+      margin: 1rem 0;
+      color: var(--muted);
+    }
+
+    /* Cover slide */
+    .cover {
+      text-align: center;
+      background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(59, 130, 246, 0.12) 0%, transparent 60%);
+    }
+    .cover .tagline {
+      font-size: 1.25rem;
+      color: var(--muted);
+      margin-top: 0.5rem;
+      margin-bottom: 3rem;
+    }
+    .cover .stack {
+      display: inline-flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .cover .stack span {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 0.35rem 0.75rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    /* Two columns */
+    .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: start; }
+    @media (max-width: 768px) { .cols { grid-template-columns: 1fr; } }
+
+    /* Cards */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .card h3 { margin-bottom: 0.5rem; }
+    .card p { margin-bottom: 0; font-size: 0.95rem; }
+
+    /* Architecture diagram */
+    .arch {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr auto 1fr;
+      gap: 0.5rem;
+      align-items: center;
+      margin: 1.5rem 0;
+      font-size: 0.9rem;
+    }
+    .arch-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem;
+      text-align: center;
+    }
+    .arch-arrow { color: var(--muted); font-size: 1.25rem; }
+    @media (max-width: 700px) {
+      .arch {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto auto auto auto;
+      }
+      .arch-arrow { transform: rotate(90deg); }
+    }
+
+    /* Feature grid */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .feature-grid .card { margin-bottom: 0; }
+
+    /* Highlight box */
+    .highlight {
+      background: rgba(59, 130, 246, 0.08);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+      margin: 1rem 0;
+    }
+    .highlight p { color: var(--text); margin-bottom: 0; }
+
+    /* Nav hint */
+    .nav-hint {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 2rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .nav-hint kbd {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 0.2em 0.5em;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+    }
+  </style>
+</head>
+<body>
+  <div class="nav-hint" aria-hidden="true"><kbd>←</kbd> <kbd>→</kbd> veya kaydır</div>
+
+  <section class="slide cover" id="cover">
+    <div class="slide-content">
+      <h1>CubiqPort</h1>
+      <p class="tagline">Sunucu orkestrasyon platformu — tek panelden sunucular, domainler, DNS, SSL ve deployment</p>
+      <div class="stack">
+        <span>Node.js</span>
+        <span>Fastify</span>
+        <span>Next.js 14</span>
+        <span>PostgreSQL</span>
+        <span>Redis</span>
+        <span>Docker</span>
+      </div>
+    </div>
+    <span class="slide-num">1</span>
+  </section>
+
+  <section class="slide" id="problem">
+    <div class="slide-content">
+      <h2>Problem</h2>
+      <p class="lead">Birden fazla sunucu ve domain yönetmek manuel, hataya açık ve zaman alıcı.</p>
+      <ul>
+        <li>SSH ile her sunucuya ayrı bağlanıp nginx, SSL, DNS ayarları yapmak</li>
+        <li>Deploy için tekrarlayan script’ler ve farklı ortamlar</li>
+        <li>Metrik ve sağlık takibinin merkezi olmaması</li>
+        <li>Güvenlik: SSH anahtarları ve sırların güvenli saklanması</li>
+      </ul>
+      <div class="highlight">
+        <p><strong>Hedef:</strong> Tüm sunucu ve domain yaşam döngüsünü tek bir kontrol panelinden yönetmek.</p>
+      </div>
+    </div>
+    <span class="slide-num">2</span>
+  </section>
+
+  <section class="slide" id="solution">
+    <div class="slide-content">
+      <h2>Çözüm: CubiqPort</h2>
+      <p class="lead">Production-ready sunucu orkestrasyon platformu.</p>
+      <div class="cols">
+        <div>
+          <h3>Yönetim paneli (Web)</h3>
+          <p>Sunucu ekleme, domain oluşturma, DNS, SSL, deployment tetikleme ve canlı izleme.</p>
+          <h3>API</h3>
+          <p>Auth, sunucu/domain/DNS/deployment yönetimi, metrik toplama. REST + Swagger.</p>
+        </div>
+        <div>
+          <h3>Agent</h3>
+          <p>Her yönetilen sunucuda hafif bir HTTP agent: deployment çalıştırma, nginx + SSL, metrik gönderme.</p>
+          <div class="card">
+            <p>Domain oluşturulunca otomatik: DNS (Cloudflare) → nginx config → SSL (Let's Encrypt).</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <span class="slide-num">3</span>
+  </section>
+
+  <section class="slide" id="architecture">
+    <div class="slide-content">
+      <h2>Mimari</h2>
+      <p>Monorepo (npm workspaces): <code>apps/api</code>, <code>apps/web</code>, <code>apps/agent</code>, <code>packages/shared</code>.</p>
+      <div class="arch">
+        <div class="arch-item"><strong>Web</strong><br/>Next.js 14<br/>Dashboard</div>
+        <span class="arch-arrow">→</span>
+        <div class="arch-item"><strong>API</strong><br/>Fastify<br/>PostgreSQL · Redis</div>
+        <span class="arch-arrow">→</span>
+        <div class="arch-item"><strong>Agent</strong><br/>Sunucuda<br/>systemd</div>
+      </div>
+      <h3>Katman kuralları (API)</h3>
+      <pre>routes.ts → controller.ts → service.ts → repository.ts</pre>
+      <p>Tipler ve Zod şemaları <code>@cubiqport/shared</code> içinde paylaşılır.</p>
+    </div>
+    <span class="slide-num">4</span>
+  </section>
+
+  <section class="slide" id="tech">
+    <div class="slide-content">
+      <h2>Teknoloji yığını</h2>
+      <div class="cols">
+        <div>
+          <div class="card"><h3>Backend</h3><p>Node.js 20, Fastify 4, Drizzle ORM, PostgreSQL 16, Redis 7</p></div>
+          <div class="card"><h3>Frontend</h3><p>Next.js 14 (App Router), TailwindCSS, shadcn/ui, Recharts</p></div>
+        </div>
+        <div>
+          <div class="card"><h3>Altyapı</h3><p>Docker, nginx, Certbot (Let's Encrypt), Cloudflare API</p></div>
+          <div class="card"><h3>Güvenlik</h3><p>JWT (HS256), bcrypt, SSH anahtarları AES-256-GCM ile şifreli</p></div>
+        </div>
+      </div>
+      <p>Uzun işlemler: SSE job pattern; domain analizleri (SEO, stress, güvenlik): Redis varsa BullMQ kuyruğu + worker.</p>
+    </div>
+    <span class="slide-num">5</span>
+  </section>
+
+  <section class="slide" id="features">
+    <div class="slide-content">
+      <h2>Özellikler</h2>
+      <div class="feature-grid">
+        <div class="card"><h3>Sunucular</h3><p>Ekleme, SSH test, agent kurulumu (provision), ping</p></div>
+        <div class="card"><h3>Domainler</h3><p>Oluşturma, otomatik DNS + nginx, SSL açma</p></div>
+        <div class="card"><h3>DNS</h3><p>Kayıt listeleme/ekleme/silme, Cloudflare senkron</p></div>
+        <div class="card"><h3>Deployments</h3><p>Tetikleme, iptal, SSE ile canlı log</p></div>
+        <div class="card"><h3>Monitoring</h3><p>Canlı ve geçmiş metrik (CPU, RAM, disk, ağ)</p></div>
+      </div>
+      <h3>Domain oluşturma akışı</h3>
+      <p>API’ye <code>POST /domains</code> → Cloudflare’da A kaydı → Agent’a nginx config yazdırma → nginx reload → domain <em>active</em>.</p>
+    </div>
+    <span class="slide-num">6</span>
+  </section>
+
+  <section class="slide" id="security">
+    <div class="slide-content">
+      <h2>Güvenlik</h2>
+      <ul>
+        <li>SSH anahtarları veritabanında AES-256-GCM ile şifreli saklanır</li>
+        <li>Tüm API rotaları JWT ile korunur; agent <code>X-Agent-Secret</code> (HMAC) ile doğrulanır</li>
+        <li>Şifreler bcrypt (12 round) ile hash’lenir</li>
+        <li>Rate limiting: 200 istek/dakika/IP</li>
+        <li>Helmet güvenlik başlıkları (API ve agent)</li>
+      </ul>
+      <div class="highlight">
+        <p>Production deploy: <code>deploy.sh</code> ile SSH/rsync → sunucuda PM2 + Nginx.</p>
+      </div>
+    </div>
+    <span class="slide-num">7</span>
+  </section>
+
+  <section class="slide" id="deploy">
+    <div class="slide-content">
+      <h2>Deployment</h2>
+      <p><code>./deploy.sh [api|web|all]</code> — SSH ile sunucuya bağlanır, rsync ile kod gönderir, build ve PM2 restart yapar.</p>
+      <pre># Sunucu yapısı (örnek)
+/var/www/html/
+├── .env, package.json, ecosystem.config.cjs (PM2)
+├── packages/shared/dist
+├── apps/api/dist    → PM2: cubiqport-api
+└── apps/web/.next/standalone  → PM2: cubiqport-web</pre>
+      <p>Nginx reverse proxy; Redis isteğe bağlı (kuyruk + canlı metrik önbelleği). Worker: <code>cubiqport-worker</code> (Redis varsa analiz kuyruğunu işler).</p>
+    </div>
+    <span class="slide-num">8</span>
+  </section>
+
+  <section class="slide cover" id="thanks">
+    <div class="slide-content">
+      <h1>Teşekkürler</h1>
+      <p class="tagline">Sorularınız için</p>
+      <div class="stack" style="margin-top: 2rem;">
+        <span>API docs: /docs (Swagger)</span>
+        <span>README · Monorepo · TypeScript</span>
+      </div>
+    </div>
+    <span class="slide-num">9</span>
+  </section>
+
+  <script>
+    (function () {
+      var slides = document.querySelectorAll('.slide');
+      var total = slides.length;
+      var current = 0;
+
+      function go(n) {
+        current = (current + n + total) % total;
+        slides[current].scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); go(1); }
+        if (e.key === 'ArrowLeft') { e.preventDefault(); go(-1); }
+      });
+
+      var observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (!entry.isIntersecting) return;
+          var i = Array.prototype.indexOf.call(slides, entry.target);
+          if (i !== -1) current = i;
+        });
+      }, { threshold: 0.5 });
+      slides.forEach(function (s) { observer.observe(s); });
+    })();
+  </script>
+</body>
+</html>

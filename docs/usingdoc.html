@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CubiqPort Kullanım Kılavuzu</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      color: #1a1a1a;
+      background: #f5f5f5;
+      padding: 1rem;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 1.75rem;
+      margin-bottom: 0.5rem;
+      color: #0f172a;
+    }
+    .subtitle {
+      color: #64748b;
+      font-size: 1rem;
+      margin-bottom: 2rem;
+    }
+    h2 {
+      font-size: 1.25rem;
+      margin-top: 2rem;
+      margin-bottom: 0.75rem;
+      color: #0f172a;
+      padding-bottom: 0.25rem;
+      border-bottom: 2px solid #3b82f6;
+    }
+    p { margin-bottom: 0.75rem; }
+    ul, ol { margin: 0 0 1rem 1.5rem; }
+    li { margin-bottom: 0.35rem; }
+    .step {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 0.75rem;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .step strong { color: #0f172a; }
+    .step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.5rem;
+      height: 1.5rem;
+      background: #3b82f6;
+      color: #fff;
+      border-radius: 50%;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-right: 0.5rem;
+    }
+    .tip {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      margin: 1rem 0;
+      font-size: 0.95rem;
+    }
+    .tip strong { color: #1d4ed8; }
+    .menu-name {
+      background: #f1f5f9;
+      padding: 0.2em 0.5em;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    code {
+      background: #f1f5f9;
+      padding: 0.15em 0.4em;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+    .short {
+      color: #64748b;
+      font-size: 0.9rem;
+      margin-top: 0.25rem;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>CubiqPort Kullanım Kılavuzu</h1>
+  <p class="subtitle">Sunucularınızı, domainlerinizi ve yayınlarınızı tek yerden yönetin — adım adım, basit anlatım.</p>
+
+  <h2>Bu panel ne işe yarar?</h2>
+  <p>CubiqPort ile:</p>
+  <ul>
+    <li>Sunucularınızı panele ekleyip tek yerden yönetirsiniz.</li>
+    <li>Domain (site adresi) ekleyince DNS ve sunucu ayarları otomatik yapılır.</li>
+    <li>SSL (kilit ikonu) tek tıkla açılır.</li>
+    <li>Projenizi sunucuya “deploy” ederek yayına alırsınız.</li>
+    <li>Sunucu ve sitelerinizin durumunu “İzleme” ekranından takip edersiniz.</li>
+  </ul>
+
+  <h2>1. Giriş yapmak</h2>
+  <div class="step">
+    <span class="step-num">1</span><strong>Kayıt ol</strong><br>
+    <span class="short">Henüz hesabın yoksa: “Kayıt ol” / “Register” sayfasına git. E-posta ve şifre belirle.</span>
+  </div>
+  <div class="step">
+    <span class="step-num">2</span><strong>Giriş yap</strong><br>
+    <span class="short">“Giriş yap” / “Login” sayfasında e-posta ve şifreni yaz. Girişten sonra ana panele (Genel Bakış) yönlendirilirsin.</span>
+  </div>
+
+  <h2>2. Sunucu eklemek</h2>
+  <p>Yönetmek istediğin sunucuyu panele eklemen gerekir. Sonra domain ve deployment bu sunucuya bağlanır.</p>
+  <div class="step">
+    <span class="step-num">1</span><strong>Sol menüden “Sunucular”a tıkla.</strong>
+  </div>
+  <div class="step">
+    <span class="step-num">2</span><strong>“Sunucu ekle” / “Yeni sunucu” butonuna tıkla.</strong>
+  </div>
+  <div class="step">
+    <span class="step-num">3</span><strong>İstenen bilgileri doldur:</strong><br>
+    <span class="short">Sunucu adı (ör: “Ana sunucu”), IP adresi, SSH kullanıcı adı (genelde <code>root</code>), SSH portu (genelde <code>22</code>). SSH girişi için şifre veya özel anahtar (key) kullanıyorsan onu seç.</span>
+  </div>
+  <div class="step">
+    <span class="step-num">4</span><strong>Kaydet. Sonra “Bağlantıyı test et” ile dene.</strong><br>
+    <span class="short">Başarılı olursa sunucu kullanıma hazır.</span>
+  </div>
+  <div class="step">
+    <span class="step-num">5</span><strong>“Agent kur” / “Provision” yap.</strong><br>
+    <span class="short">Bu, sunucuda CubiqPort’un küçük yardımcı programını kurar. Domain ve deployment işlemleri bunun sayesinde çalışır.</span>
+  </div>
+  <div class="tip"><strong>İpucu:</strong> SSH ile sunucuya kendin girebiliyorsan (şifre veya anahtar ile), panel de aynı bilgilerle bağlanabilir.</div>
+
+  <h2>3. Domain (site adresi) eklemek</h2>
+  <p>Bir domain eklediğinde panel, DNS kaydını ve sunucudaki web ayarını (nginx) otomatik yapar. Cloudflare kullanıyorsan DNS oraya da yansır.</p>
+  <div class="step">
+    <span class="step-num">1</span><strong>Sol menüden “Domainler”e tıkla.</strong>
+  </div>
+  <div class="step">
+    <span class="step-num">2</span><strong>“Yeni domain” / “Domain ekle” butonuna tıkla.</strong>
+  </div>
+  <div class="step">
+    <span class="step-num">3</span><strong>Domain adını yaz</strong> (ör: <code>sitem.com</code>) <strong>ve hangi sunucuya bağlanacağını seç.</strong>
+  </div>
+  <div class="step">
+    <span class="step-num">4</span><strong>Kaydet.</strong><br>
+    <span class="short">Arka planda DNS ve nginx ayarları yapılır. Durum “Aktif” olunca site o sunucuya yönlenmiş demektir.</span>
+  </div>
+  <div class="tip"><strong>İpucu:</strong> Domain’in “nameserver” ayarının Cloudflare (veya panelin kullandığı DNS) tarafına işaret etmesi gerekir; yoksa otomatik DNS çalışmaz.</div>
+
+  <h2>4. SSL (kilit) açmak</h2>
+  <p>Siteyi HTTPS ile güvenli hale getirmek için SSL sertifikası kullanılır. Panel Let’s Encrypt ile ücretsiz sertifika alır.</p>
+  <div class="step">
+    <span class="step-num">1</span><strong>“Domainler”e git, ilgili domain’i seç.</strong>
+  </div>
+  <div class="step">
+    <span class="step-num">2</span><strong>“SSL aç” / “SSL etkinleştir” benzeri butona tıkla.</strong><br>
+    <span class="short">Bir süre bekleyebilirsin. Başarılı olunca adres çubuğunda kilit ikonu görünür.</span>
+  </div>
+
+  <h2>5. Deployment (yayına alma) yapmak</h2>
+  <p>Kodunu sunucuya atıp uygulamayı çalıştırmak için “Deployment” kullanırsın. Panel sunucuya bağlanıp repo’yu çeker, gerekirse build alır ve servisi başlatır.</p>
+  <div class="step">
+    <span class="step-num">1</span><strong>Sol menüden “Deployments”a tıkla.</strong>
+  </div>
+  <div class="step">
+    <span class="step-num">2</span><strong>“Yeni deployment” / “Deploy” butonuna tıkla.</strong>
+  </div>
+  <div class="step">
+    <span class="step-num">3</span><strong>Hangi domain / proje için deploy yapacağını seç;</strong> repo adresi ve dal (branch) gibi alanları doldur (ekranda ne yazıyorsa). Kaydet / Başlat.</strong>
+  </div>
+  <div class="step">
+    <span class="step-num">4</span><strong>Log’ları izle.</strong><br>
+    <span class="short">Sayfa canlı log gösteriyorsa işlemin ilerleyişini oradan takip edebilirsin. Bittiğinde uygulama sunucuda çalışıyor olur.</span>
+  </div>
+
+  <h2>6. İzleme (Monitoring)</h2>
+  <p>Sunucu ve sitelerin durumunu görmek için:</p>
+  <div class="step">
+    <span class="step-num">1</span><strong>Sol menüden “İzleme”ye tıkla.</strong><br>
+    <span class="short">Burada sunucuların CPU, bellek, disk kullanımı ve gerekirse canlı metrikler listelenir. Bir sunucuya tıklayarak detay görebilirsin.</span>
+  </div>
+
+  <h2>7. Menülerin kısa anlamları</h2>
+  <ul>
+    <li><span class="menu-name">Genel Bakış</span> — Özet bilgi, hızlı erişim.</li>
+    <li><span class="menu-name">Sunucular</span> — Eklediğin sunucular; ekleme, test, agent kurma.</li>
+    <li><span class="menu-name">Domainler</span> — Tüm domainler; yeni domain, SSL.</li>
+    <li><span class="menu-name">Deployments</span> — Yayına alma işlemleri ve geçmişi.</li>
+    <li><span class="menu-name">DNS</span> — Domain’lere ait DNS kayıtları (ileri seviye).</li>
+    <li><span class="menu-name">İzleme</span> — Sunucu ve site metrikleri.</li>
+    <li><span class="menu-name">Faturalama</span> — Fatura / ödeme ile ilgili sayfa (varsa).</li>
+    <li><span class="menu-name">Databases</span> — Veritabanı yönetimi (varsa).</li>
+  </ul>
+
+  <h2>Bir şey çalışmazsa</h2>
+  <ul>
+    <li><strong>Sunucu bağlanmıyorsa:</strong> IP, kullanıcı adı, port ve şifre/anahtar doğru mu kontrol et. Sunucunun firewall’unda SSH portu açık mı bak.</li>
+    <li><strong>Domain açılmıyorsa:</strong> DNS’in doğru nameserver’a işaret ettiğinden ve “Agent kur”un yapıldığından emin ol.</li>
+    <li><strong>Deploy hata veriyorsa:</strong> Repo adresi, branch ve sunucudaki path bilgilerini kontrol et; log satırlarındaki hata mesajına bak.</li>
+  </ul>
+
+  <p style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #e2e8f0; color: #64748b; font-size: 0.9rem;">
+    Bu kılavuz CubiqPort panelinin güncel sürümüne göre hazırlanmıştır. Menü isimleri veya adımlar panelde biraz farklı görünürse, aynı mantıkla ilgili butonu veya sayfayı kullanabilirsin.
+  </p>
+
+</body>
+</html>
