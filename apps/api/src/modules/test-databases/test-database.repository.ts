@@ -1,6 +1,6 @@
 import { db } from '../../db/index.js';
 import { testDatabases } from '../../db/schema.js';
-import { eq, and, count } from 'drizzle-orm';
+import { eq, and, count, isNull } from 'drizzle-orm';
 import type { NewTestDatabase } from '../../db/schema.js';
 
 export class TestDatabaseRepository {
@@ -36,6 +36,15 @@ export class TestDatabaseRepository {
       .select({ port: testDatabases.port })
       .from(testDatabases)
       .where(eq(testDatabases.serverId, serverId));
+    return new Set(rows.map((r) => r.port));
+  }
+
+  /** Ports in use on demo host (serverId null). */
+  async getUsedPortsForDemo(): Promise<Set<number>> {
+    const rows = await db
+      .select({ port: testDatabases.port })
+      .from(testDatabases)
+      .where(isNull(testDatabases.serverId));
     return new Set(rows.map((r) => r.port));
   }
 

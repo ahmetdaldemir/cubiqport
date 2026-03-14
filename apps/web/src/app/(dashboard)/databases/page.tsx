@@ -16,11 +16,10 @@ import {
   CheckIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Server } from '@cubiqport/shared';
 
 interface TestDatabase {
   id: string;
-  serverId: string;
+  serverId: string | null;
   type: 'postgres' | 'mysql' | 'mongo';
   name: string;
   host: string;
@@ -45,30 +44,23 @@ function useToken() {
   return typeof window !== 'undefined' ? localStorage.getItem('cubiq_token') ?? '' : '';
 }
 
-// ─── Create Database Modal ────────────────────────────────────────────────────
+// ─── Create Database Modal (demo: 50 MB on platform server) ─────────────────────
 function CreateModal({
-  servers,
   onClose,
   onCreate,
   loading,
 }: {
-  servers: Server[];
   onClose: () => void;
-  onCreate: (body: { serverId: string; type: 'postgres' | 'mysql' | 'mongo'; name: string }) => Promise<void>;
+  onCreate: (body: { type: 'postgres' | 'mysql'; name: string }) => Promise<void>;
   loading: boolean;
 }) {
-  const [serverId, setServerId] = useState('');
-  const [type, setType] = useState<'postgres' | 'mysql' | 'mongo'>('postgres');
+  const [type, setType] = useState<'postgres' | 'mysql'>('postgres');
   const [name, setName] = useState('');
-
-  useEffect(() => {
-    if (servers.length && !serverId) setServerId(servers[0].id);
-  }, [servers, serverId]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!serverId || !name.trim()) return;
-    await onCreate({ serverId, type, name: name.trim() });
+    if (!name.trim()) return;
+    await onCreate({ type, name: name.trim() });
     onClose();
   }
 
@@ -76,37 +68,24 @@ function CreateModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
         <div className="flex items-start justify-between mb-4">
-          <h2 className="text-base font-semibold">Create Database</h2>
+          <h2 className="text-base font-semibold">Create Demo Database</h2>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
             <XIcon className="h-4 w-4" />
           </button>
         </div>
-
+        <p className="text-sm text-muted-foreground mb-4">
+          Test database on our platform — 50 MB limit, PostgreSQL or MySQL.
+        </p>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1.5">Server</label>
-            <select
-              value={serverId}
-              onChange={(e) => setServerId(e.target.value)}
-              className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-              required
-            >
-              <option value="">Select server</option>
-              {servers.map((s) => (
-                <option key={s.id} value={s.id}>{s.name} ({s.ip})</option>
-              ))}
-            </select>
-          </div>
           <div>
             <label className="block text-sm font-medium mb-1.5">Database Type</label>
             <select
               value={type}
-              onChange={(e) => setType(e.target.value as 'postgres' | 'mysql' | 'mongo')}
+              onChange={(e) => setType(e.target.value as 'postgres' | 'mysql')}
               className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
             >
               <option value="postgres">PostgreSQL</option>
               <option value="mysql">MySQL</option>
-              <option value="mongo">MongoDB</option>
             </select>
           </div>
           <div>
@@ -285,7 +264,6 @@ function ActionMenu({ actions }: { actions: Action[] }) {
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function DatabasesPage() {
   const [list, setList] = useState<TestDatabase[]>([]);
-  const [servers, setServers] = useState<Server[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showCreate, setShowCreate] = useState(false);
@@ -301,15 +279,10 @@ export default function DatabasesPage() {
     setLoading(true);
     setError('');
     try {
-      const [resList, resServers] = await Promise.all([
-        fetch('/api/v1/databases', { headers }),
-        fetch('/api/v1/servers', { headers }),
-      ]);
+      const resList = await fetch('/api/v1/databases', { headers });
       const jsonList = await resList.json();
-      const jsonServers = await resServers.json();
       if (!resList.ok) throw new Error(jsonList.error ?? 'Failed to load databases');
       setList(jsonList.data ?? []);
-      setServers(jsonServers.data ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
@@ -321,7 +294,7 @@ export default function DatabasesPage() {
     load();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function handleCreate(body: { serverId: string; type: 'postgres' | 'mysql' | 'mongo'; name: string }) {
+  async function handleCreate(body: { type: 'postgres' | 'mysql'; name: string }) {
     setCreateLoading(true);
     setBanner(null);
     try {
@@ -332,7 +305,7 @@ export default function DatabasesPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Create failed');
-      setBanner({ msg: 'Database created.', ok: true });
+      setBanner({ msg: 'Demo database created (50 MB).', ok: true });
       await load();
     } catch (e) {
       setBanner({ msg: e instanceof Error ? e.message : 'Create failed', ok: false });
@@ -399,14 +372,14 @@ export default function DatabasesPage() {
   }
 
   const typeLabel: Record<string, string> = { postgres: 'PostgreSQL', mysql: 'MySQL', mongo: 'MongoDB' };
+  // Only postgres/mysql are offered now; mongo kept for existing rows
 
   return (
     <div className="flex flex-col">
-      <Header title="Databases" description="Create and manage test/development databases on your servers" />
+      <Header title="Databases" description="Demo databases on our platform — 50 MB, PostgreSQL and MySQL only" />
 
       {showCreate && (
         <CreateModal
-          servers={servers}
           onClose={() => setShowCreate(false)}
           onCreate={handleCreate}
           loading={createLoading}
@@ -482,7 +455,7 @@ export default function DatabasesPage() {
             </div>
             <h3 className="mt-4 text-base font-semibold">No databases yet</h3>
             <p className="mt-1 max-w-xs text-sm text-muted-foreground">
-              Create a test or development database on one of your servers.
+              Create a demo database (50 MB) on our platform — PostgreSQL or MySQL.
             </p>
             <button
               onClick={() => setShowCreate(true)}

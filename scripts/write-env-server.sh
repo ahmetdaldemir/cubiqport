@@ -11,7 +11,6 @@ NODE_ENV=production
 API_PORT=4000
 API_HOST=0.0.0.0
 DATABASE_URL=postgresql://dev_user:dev_pass@127.0.0.1:5432/cubiqport
-REDIS_URL=redis://127.0.0.1:6379
 JWT_SECRET=$JWT
 JWT_EXPIRES_IN=7d
 ENCRYPTION_KEY=$ENC

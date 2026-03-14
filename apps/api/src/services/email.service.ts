@@ -109,3 +109,79 @@ export async function sendSuspendEmail(to: string, reason?: string) {
   }
   await transporter.sendMail({ from: FROM, to, subject: 'CubiqPort Hesabınız Askıya Alındı', html });
 }
+
+export interface TestDatabaseCreatedMailOpts {
+  to: string;
+  dbName: string;
+  type: string;
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+  databaseName: string;
+  storageLimitMb: number;
+}
+
+export async function sendTestDatabaseCreatedEmail(opts: TestDatabaseCreatedMailOpts) {
+  const transporter = getTransporter();
+  const { to, dbName, type, host, port, username, password, databaseName, storageLimitMb } = opts;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9fafb; margin: 0; padding: 20px; }
+    .card { max-width: 560px; margin: 0 auto; background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; overflow: hidden; }
+    .header { background: linear-gradient(135deg, #0ea5e9, #06b6d4); padding: 28px; text-align: center; }
+    .header h1 { color: #fff; margin: 0; font-size: 20px; }
+    .header p { color: rgba(255,255,255,.9); margin: 6px 0 0; font-size: 13px; }
+    .body { padding: 28px; }
+    .cred-box { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 16px; margin: 16px 0; font-size: 13px; }
+    .cred-box p { margin: 0 0 6px; color: #0c4a6e; }
+    .cred-box strong, .cred-box code { color: #0369a1; word-break: break-all; }
+    .footer { padding: 16px 28px; border-top: 1px solid #f3f4f6; font-size: 12px; color: #9ca3af; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <h1>Demo veritabanı oluşturuldu</h1>
+      <p>${dbName} — ${type === 'postgres' ? 'PostgreSQL' : 'MySQL'} (${storageLimitMb} MB)</p>
+    </div>
+    <div class="body">
+      <p style="color:#374151;font-size:14px;">Bağlantı bilgileriniz aşağıdadır. Bu bilgileri güvenli saklayın.</p>
+      <div class="cred-box">
+        <p><strong>Host</strong></p>
+        <code>${host}</code>
+        <p style="margin-top:10px;"><strong>Port</strong></p>
+        <code>${port}</code>
+        <p style="margin-top:10px;"><strong>Kullanıcı</strong></p>
+        <code>${username}</code>
+        <p style="margin-top:10px;"><strong>Şifre</strong></p>
+        <code>${password}</code>
+        <p style="margin-top:10px;"><strong>Veritabanı adı</strong></p>
+        <code>${databaseName}</code>
+      </div>
+      <p style="color:#6b7280;font-size:13px;">Örnek bağlantı: <code>${type}://${username}:****@${host}:${port}/${databaseName}</code></p>
+    </div>
+    <div class="footer">
+      CubiqPort — Demo veritabanı bilgileri. Bu e-postayı kimseyle paylaşmayın.
+    </div>
+  </div>
+</body>
+</html>`;
+
+  if (!transporter) {
+    logger.warn({ to, dbName }, '[Email] SMTP yapılandırılmamış — test DB bilgileri maili gönderilmedi');
+    return;
+  }
+  await transporter.sendMail({
+    from: FROM,
+    to,
+    subject: `CubiqPort — Demo veritabanı: ${dbName}`,
+    html,
+  });
+  logger.info({ to, dbName }, '[Email] Test DB bilgileri maili gönderildi');
+}

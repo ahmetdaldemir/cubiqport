@@ -56,9 +56,6 @@ API_HOST=0.0.0.0
 # Database (PostgreSQL)
 DATABASE_URL=postgresql://postgres:${PG_PASS_ENCODED}@141.91.65.111:5432/cubiqport
 
-# Redis (local)
-REDIS_URL=redis://127.0.0.1:6379
-
 # Auth
 JWT_SECRET=${JWT_SECRET}
 JWT_EXPIRES_IN=7d

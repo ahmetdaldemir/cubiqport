@@ -9,7 +9,7 @@ A production-ready server orchestration platform — manage servers, domains, DN
 ```
 cubiqport/
 ├── apps/
-│   ├── api/          # Fastify REST API (Node.js + PostgreSQL + Redis)
+│   ├── api/          # Fastify REST API (Node.js + PostgreSQL)
 │   ├── web/          # Next.js 14 dashboard (App Router + Tailwind + shadcn/ui)
 │   └── agent/        # Lightweight HTTP agent running on each managed server
 └── packages/
@@ -28,7 +28,7 @@ cubiqport/
 
 ## Tech stack
 
-- **Backend**: Node.js 20, Fastify 4, Drizzle ORM, PostgreSQL 16, Redis 7
+- **Backend**: Node.js 20, Fastify 4, Drizzle ORM, PostgreSQL 16
 - **Frontend**: Next.js 14 (App Router), TailwindCSS 3, shadcn/ui, Recharts
 - **Infrastructure**: Docker, nginx, Certbot (Let's Encrypt), Cloudflare API
 - **Auth**: JWT (HS256), bcrypt password hashing, AES-256-GCM credential encryption
@@ -61,7 +61,7 @@ cp .env.example .env
 ### 3. Start infrastructure
 
 ```bash
-docker compose up postgres redis -d
+docker compose up postgres -d
 ```
 
 ### 4. Run database migrations

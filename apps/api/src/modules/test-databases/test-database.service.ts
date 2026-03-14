@@ -1,15 +1,20 @@
 import { randomBytes } from 'crypto';
+import { eq } from 'drizzle-orm';
+import { db } from '../../db/index.js';
+import { users } from '../../db/schema.js';
 import { ServerRepository } from '../servers/server.repository.js';
 import { TestDatabaseRepository } from './test-database.repository.js';
-import { getTestDbPlanLimits } from './plan-limits.js';
-import { buildSshOptions } from '../../utils/ssh-credentials.js';
+import { getTestDbPlanLimits, DEMO_MAX_STORAGE_MB } from './plan-limits.js';
+import { buildSshOptions, buildDemoSshOptions } from '../../utils/ssh-credentials.js';
 import { encrypt, decrypt } from '../../utils/encrypt.js';
+import { config } from '../../config/index.js';
 import {
   createTestDbContainer,
   restartContainer,
   removeContainer,
   type TestDbType,
 } from '../../services/ssh.service.js';
+import { sendTestDatabaseCreatedEmail } from '../../services/email.service.js';
 import { NotFoundError, AppError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 
@@ -35,19 +40,18 @@ function sanitizeDbName(name: string): string {
 }
 
 export interface CreateTestDatabaseInput {
-  serverId: string;
-  type: TestDbType;
+  type: 'postgres' | 'mysql';
   name: string;
 }
 
 export class TestDatabaseService {
-  private async allocatePort(serverId: string, type: TestDbType): Promise<number> {
-    const used = await repo.getUsedPortsByServerId(serverId);
+  private async allocatePortForDemo(type: 'postgres' | 'mysql'): Promise<number> {
+    const used = await repo.getUsedPortsForDemo();
     const { start, end } = PORT_RANGES[type];
     for (let p = start; p <= end; p++) {
       if (!used.has(p)) return p;
     }
-    throw new AppError('No available port for this database type on the selected server', 503, 'NO_PORT');
+    throw new AppError('No available port for this database type on the demo server', 503, 'NO_PORT');
   }
 
   async list(userId: string) {
@@ -98,25 +102,33 @@ export class TestDatabaseService {
       );
     }
 
-    const server = await serverRepo.findById(input.serverId, userId);
-    if (!server) throw new NotFoundError('Server');
+    const demoHost = config.TEST_DATABASE_HOST;
+    const opts = buildDemoSshOptions();
+    if (!demoHost?.trim() || !opts) {
+      throw new AppError(
+        'Demo databases are not configured on this platform. Contact support.',
+        503,
+        'DEMO_NOT_CONFIGURED',
+      );
+    }
 
-    const port = await this.allocatePort(input.serverId, input.type);
+    const port = await this.allocatePortForDemo(input.type);
     const password = generatePassword();
     const username = generateUsername();
     const databaseName = sanitizeDbName(input.name);
+    const storageLimitMb = DEMO_MAX_STORAGE_MB;
 
     const row = await repo.create({
       userId,
-      serverId: input.serverId,
+      serverId: null,
       type: input.type,
       name: input.name,
-      host: server.ip,
+      host: demoHost,
       port,
       username,
       password: encrypt(password),
       databaseName,
-      storageLimitMb: limits.maxStorageMb,
+      storageLimitMb,
       status: 'creating',
       containerName: null,
     });
@@ -125,7 +137,6 @@ export class TestDatabaseService {
     const containerName = `cubiq-db-${userId.slice(0, 8)}-${shortId}`;
 
     try {
-      const opts = buildSshOptions(server);
       await createTestDbContainer(opts, {
         type: input.type,
         containerName,
@@ -133,7 +144,7 @@ export class TestDatabaseService {
         username,
         password,
         databaseName,
-        storageLimitMb: limits.maxStorageMb,
+        storageLimitMb,
       });
       await repo.updateContainerAndStatus(row.id, userId, { containerName, status: 'running' });
     } catch (err) {
@@ -142,21 +153,47 @@ export class TestDatabaseService {
       throw err;
     }
 
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: { email: true },
+    });
+    if (user?.email) {
+      sendTestDatabaseCreatedEmail({
+        to: user.email,
+        dbName: input.name,
+        type: input.type,
+        host: demoHost,
+        port,
+        username,
+        password,
+        databaseName,
+        storageLimitMb,
+      }).catch((err) => logger.warn({ err, testDbId: row.id }, 'Test DB email send failed'));
+    }
+
     return this.get(row.id, userId);
+  }
+
+  private async getSshOptsForRow(row: { serverId: string | null }): Promise<ReturnType<typeof buildSshOptions> | null> {
+    if (row.serverId) {
+      const server = await serverRepo.findByIdUnscoped(row.serverId);
+      return server ? buildSshOptions(server) : null;
+    }
+    return buildDemoSshOptions();
   }
 
   async delete(id: string, userId: string) {
     const row = await repo.findById(id, userId);
     if (!row) throw new NotFoundError('Test database');
-    const server = await serverRepo.findById(row.serverId, userId);
-    if (!server) throw new NotFoundError('Server');
 
     if (row.containerName) {
-      try {
-        const opts = buildSshOptions(server);
-        await removeContainer(opts, row.containerName);
-      } catch (err) {
-        logger.warn({ err, containerName: row.containerName }, 'Container remove failed');
+      const opts = await this.getSshOptsForRow(row);
+      if (opts) {
+        try {
+          await removeContainer(opts, row.containerName);
+        } catch (err) {
+          logger.warn({ err, containerName: row.containerName }, 'Container remove failed');
+        }
       }
     }
     await repo.delete(id, userId);
@@ -166,9 +203,8 @@ export class TestDatabaseService {
     const row = await repo.findById(id, userId);
     if (!row) throw new NotFoundError('Test database');
     if (!row.containerName) throw new AppError('No container associated', 400);
-    const server = await serverRepo.findById(row.serverId, userId);
-    if (!server) throw new NotFoundError('Server');
-    const opts = buildSshOptions(server);
+    const opts = await this.getSshOptsForRow(row);
+    if (!opts) throw new AppError('Server not available for this database', 503);
     await restartContainer(opts, row.containerName);
     await repo.updateStatus(id, userId, 'running');
     return this.get(id, userId);

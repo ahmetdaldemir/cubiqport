@@ -10,6 +10,7 @@ import {
   jsonb,
   pgEnum,
   index,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -79,7 +80,7 @@ export const domains = pgTable(
     serverId: uuid('server_id')
       .notNull()
       .references(() => servers.id, { onDelete: 'cascade' }),
-    domain: varchar('domain', { length: 255 }).notNull().unique(),
+    domain: varchar('domain', { length: 255 }).notNull(),
     rootPath: varchar('root_path', { length: 500 }).notNull().default('/var/www'),
     port: integer('port').notNull().default(3000),
     sslEnabled: boolean('ssl_enabled').notNull().default(false),
@@ -94,7 +95,10 @@ export const domains = pgTable(
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
-  (t) => [index('domains_server_id_idx').on(t.serverId)],
+  (t) => [
+    index('domains_server_id_idx').on(t.serverId),
+    uniqueIndex('domains_server_domain_unique').on(t.serverId, t.domain),
+  ],
 );
 
 // ─── DNS Records ──────────────────────────────────────────────────────────────
@@ -287,7 +291,7 @@ export const securityScanReports = pgTable(
   ],
 );
 
-// ─── Test Databases (dev/test DBs in Docker on user servers) ──────────────────
+// ─── Test Databases (demo DBs on platform server; serverId null = demo host from env) ─
 export const testDatabases = pgTable(
   'test_databases',
   {
@@ -295,9 +299,7 @@ export const testDatabases = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    serverId: uuid('server_id')
-      .notNull()
-      .references(() => servers.id, { onDelete: 'cascade' }),
+    serverId: uuid('server_id').references(() => servers.id, { onDelete: 'cascade' }),
     type: testDbTypeEnum('type').notNull(),
     name: varchar('name', { length: 100 }).notNull(),
     host: varchar('host', { length: 255 }).notNull(),
@@ -317,6 +319,28 @@ export const testDatabases = pgTable(
     index('test_databases_server_id_idx').on(t.serverId),
     index('test_databases_status_idx').on(t.status),
   ],
+);
+
+// ─── Server DB connections (sunucudaki MySQL/Postgres bağlantı bilgileri) ──────
+export const serverDbConnectionTypeEnum = pgEnum('server_db_connection_type', ['mysql', 'postgres']);
+
+export const serverDbConnections = pgTable(
+  'server_db_connections',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    serverId: uuid('server_id')
+      .notNull()
+      .references(() => servers.id, { onDelete: 'cascade' }),
+    name: varchar('name', { length: 100 }).notNull(),
+    type: serverDbConnectionTypeEnum('type').notNull(),
+    host: varchar('host', { length: 255 }).notNull().default('127.0.0.1'),
+    port: integer('port').notNull().default(3306),
+    username: varchar('username', { length: 255 }).notNull(),
+    password: text('password').notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => [index('server_db_connections_server_id_idx').on(t.serverId)],
 );
 
 // ─── Relations ────────────────────────────────────────────────────────────────
@@ -343,6 +367,7 @@ export const serversRelations = relations(servers, ({ one, many }) => ({
   domains: many(domains),
   metrics: many(metrics),
   testDatabases: many(testDatabases),
+  serverDbConnections: many(serverDbConnections),
 }));
 
 export const domainsRelations = relations(domains, ({ one, many }) => ({
@@ -381,6 +406,10 @@ export const testDatabasesRelations = relations(testDatabases, ({ one }) => ({
   server: one(servers, { fields: [testDatabases.serverId], references: [servers.id] }),
 }));
 
+export const serverDbConnectionsRelations = relations(serverDbConnections, ({ one }) => ({
+  server: one(servers, { fields: [serverDbConnections.serverId], references: [servers.id] }),
+}));
+
 // webhookEvents has no FK relations — standalone table
 
 // ─── Type Exports ─────────────────────────────────────────────────────────────
@@ -412,3 +441,5 @@ export type SecurityScanReportRow = typeof securityScanReports.$inferSelect;
 export type NewSecurityScanReportRow = typeof securityScanReports.$inferInsert;
 export type TestDatabase = typeof testDatabases.$inferSelect;
 export type NewTestDatabase = typeof testDatabases.$inferInsert;
+export type ServerDbConnection = typeof serverDbConnections.$inferSelect;
+export type NewServerDbConnection = typeof serverDbConnections.$inferInsert;

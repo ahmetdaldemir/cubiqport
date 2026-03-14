@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeftIcon,
@@ -1086,11 +1086,13 @@ function EmailTab({ domain }: { domain: Domain }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function DomainDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const token = useToken();
   const [domain, setDomain] = useState<Domain | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [tab, setTab] = useState<Tab>('overview');
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -1108,6 +1110,25 @@ export default function DomainDetailPage() {
   }, [params.id, token]);
 
   useEffect(() => { load(); }, [load]);
+
+  const handleDelete = useCallback(async () => {
+    if (!domain || !token) return;
+    if (!confirm(`"${domain.domain}" kalıcı olarak silinecek. Sunucudaki nginx konfigürasyonu ve Cloudflare DNS kayıtları da kaldırılacak. Devam etmek istiyor musunuz?`)) return;
+    setDeleteLoading(true);
+    try {
+      const res = await fetch(`/api/v1/domains/${domain.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error ?? 'Silme başarısız');
+      router.push('/domains');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Domain silinemedi');
+    } finally {
+      setDeleteLoading(false);
+    }
+  }, [domain, token, router]);
 
   if (loading) return (
     <div className="flex flex-col">
@@ -1173,6 +1194,23 @@ export default function DomainDetailPage() {
           {tab === 'dns'        && <DnsTab        domain={domain} />}
           {tab === 'subdomains' && <SubdomainsTab domain={domain} token={token} />}
           {tab === 'email'      && <EmailTab      domain={domain} />}
+        </div>
+
+        {/* Tehlikeli bölge: Domain silme */}
+        <div className="mt-10 pt-8 border-t border-border">
+          <h3 className="text-sm font-semibold text-destructive mb-2">Tehlikeli bölge</h3>
+          <p className="text-sm text-muted-foreground mb-3">
+            Bu domaini silmek sunucudaki nginx konfigürasyonunu kaldırır ve Cloudflare DNS kayıtlarını siler. Bu işlem geri alınamaz.
+          </p>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={deleteLoading}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md border border-destructive/50 text-destructive hover:bg-destructive/10 disabled:opacity-50"
+          >
+            {deleteLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <TrashIcon className="h-4 w-4" />}
+            {deleteLoading ? 'Siliniyor…' : 'Domaini sil'}
+          </button>
         </div>
       </div>
     </div>

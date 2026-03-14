@@ -1,15 +1,18 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { Header } from '@/components/layout/header';
 import { ProgressRing } from '@/components/ui/progress-ring';
 import { formatUptime, formatBytes } from '@/lib/utils';
-import { Cpu, MemoryStick, HardDrive, WifiIcon, RefreshCwIcon, ContainerIcon } from 'lucide-react';
+import { Cpu, MemoryStick, HardDrive, WifiIcon, RefreshCwIcon, ContainerIcon, ServerIcon } from 'lucide-react';
 import type { LiveMetrics } from '@cubiqport/shared';
+import type { Server } from '@cubiqport/shared';
 
 const POLL_INTERVAL = 10_000;
 
 export default function MonitoringPage() {
+  const [servers, setServers] = useState<Server[]>([]);
   const [serverId, setServerId] = useState<string>('');
   const [metrics, setMetrics] = useState<LiveMetrics | null>(null);
   const [loading, setLoading] = useState(false);
@@ -17,6 +20,17 @@ export default function MonitoringPage() {
 
   const token =
     typeof window !== 'undefined' ? localStorage.getItem('cubiq_token') ?? '' : '';
+
+  useEffect(() => {
+    fetch('/api/v1/servers', { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((j) => {
+        const list = j.data ?? [];
+        setServers(list);
+        if (list.length && !serverId) setServerId(list[0].id);
+      })
+      .catch(() => {});
+  }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchMetrics = useCallback(async () => {
     if (!serverId) return;
@@ -48,22 +62,38 @@ export default function MonitoringPage() {
 
       <div className="p-6 space-y-6">
         {/* Server selector */}
-        <div className="flex items-center gap-3">
-          <input
-            type="text"
-            value={serverId}
-            onChange={(e) => setServerId(e.target.value)}
-            placeholder="Enter server ID…"
-            className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring w-64"
-          />
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 min-w-[200px]">
+            <ServerIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+            <select
+              value={serverId}
+              onChange={(e) => setServerId(e.target.value)}
+              className="flex-1 rounded-lg border border-border bg-secondary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="">Sunucu seçin…</option>
+              {servers.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} — {s.ip}
+                </option>
+              ))}
+            </select>
+          </div>
           <button
             onClick={fetchMetrics}
             disabled={loading || !serverId}
             className="flex items-center gap-2 rounded-lg bg-secondary border border-border px-3 py-2 text-sm font-medium transition hover:bg-secondary/80 disabled:opacity-50"
           >
             <RefreshCwIcon className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
+            Yenile
           </button>
+          {servers.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              Kayıtlı sunucu yok.{' '}
+              <Link href="/servers/new" className="text-primary hover:underline">
+                Sunucu ekle
+              </Link>
+            </p>
+          )}
         </div>
 
         {error && (
@@ -75,7 +105,9 @@ export default function MonitoringPage() {
         {!metrics ? (
           <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card py-20 text-center">
             <Cpu className="h-8 w-8 text-muted-foreground/40 mb-3" />
-            <p className="text-sm text-muted-foreground">Enter a server ID to view live metrics</p>
+            <p className="text-sm text-muted-foreground">
+              {serverId ? 'Metrikler yükleniyor…' : 'Görüntülemek için yukarıdan bir sunucu seçin'}
+            </p>
           </div>
         ) : (
           <>

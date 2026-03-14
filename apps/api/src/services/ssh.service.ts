@@ -831,6 +831,24 @@ export async function createNginxConfigViaSsh(
   }
 }
 
+/** Sunucudan domain'e ait nginx config ve symlink'i kaldırır (sites-enabled, sites-available, reload). */
+export async function removeNginxConfigViaSsh(
+  opts: SshConnectionOptions,
+  domain: string,
+): Promise<void> {
+  const ssh = new NodeSSH();
+  try {
+    await ssh.connect(buildConnectConfig(opts));
+    const enabledPath = `/etc/nginx/sites-enabled/${domain}.conf`;
+    const availablePath = `/etc/nginx/sites-available/${domain}.conf`;
+    await ssh.execCommand(`rm -f ${JSON.stringify(enabledPath)} ${JSON.stringify(availablePath)}`);
+    const res = await ssh.execCommand('nginx -t 2>&1 && (systemctl reload nginx 2>&1 || nginx -s reload 2>&1)');
+    if (res.code !== 0) logger.warn({ domain, stderr: res.stderr }, 'Nginx remove/reload failed');
+  } finally {
+    ssh.dispose();
+  }
+}
+
 // ─── Git Deploy ───────────────────────────────────────────────────────────────
 
 export async function gitDeploy(
@@ -1094,4 +1112,61 @@ export async function createTestDbContainer(
   } finally {
     ssh.dispose();
   }
+}
+
+// ─── Remote DB list (MySQL/PostgreSQL on server via SSH) ───────────────────────
+function escapeForDoubleQuotes(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$');
+}
+
+export interface RemoteDbConnectionParams {
+  type: 'mysql' | 'postgres';
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+}
+
+/** Runs on server via SSH: list database names. */
+export async function listRemoteDatabases(
+  opts: SshConnectionOptions,
+  params: RemoteDbConnectionParams,
+): Promise<string[]> {
+  const { type, host, port, username, password } = params;
+  const escaped = escapeForDoubleQuotes(password);
+
+  let cmd: string;
+  if (type === 'mysql') {
+    cmd = `export MYSQL_PWD="${escaped}" && mysql -h ${JSON.stringify(host)} -P ${port} -u ${JSON.stringify(username)} -e "SHOW DATABASES" -N 2>/dev/null || true`;
+  } else {
+    cmd = `export PGPASSWORD="${escaped}" && psql -h ${JSON.stringify(host)} -p ${port} -U ${JSON.stringify(username)} -t -A -c "SELECT datname FROM pg_database WHERE datistemplate = false" 2>/dev/null || true`;
+  }
+
+  const res = await runRemoteCommand(opts, cmd);
+  const line = (res.stdout || '').trim();
+  if (!line) return [];
+  return line.split('\n').map((s) => s.trim()).filter(Boolean);
+}
+
+/** Runs on server via SSH: list table names in a database. */
+export async function listRemoteTables(
+  opts: SshConnectionOptions,
+  params: RemoteDbConnectionParams,
+  database: string,
+): Promise<string[]> {
+  const { type, host, port, username, password } = params;
+  const escaped = escapeForDoubleQuotes(password);
+  const dbSafe = database.replace(/[^a-zA-Z0-9_]/g, '_');
+
+  let cmd: string;
+  if (type === 'mysql') {
+    cmd = `export MYSQL_PWD="${escaped}" && mysql -h ${JSON.stringify(host)} -P ${port} -u ${JSON.stringify(username)} ${JSON.stringify(dbSafe)} -e "SHOW TABLES" -N 2>/dev/null || true`;
+  } else {
+    cmd = `export PGPASSWORD="${escaped}" && psql -h ${JSON.stringify(host)} -p ${port} -U ${JSON.stringify(username)} -d ${JSON.stringify(dbSafe)} -t -A -c "SELECT tablename FROM pg_tables WHERE schemaname = 'public'" 2>/dev/null || true`;
+  }
+
+  const res = await runRemoteCommand(opts, cmd);
+  const line = (res.stdout || '').trim();
+  if (!line) return [];
+  return line.split('\n').map((s) => s.trim()).filter(Boolean);
 }

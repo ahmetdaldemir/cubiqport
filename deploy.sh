@@ -123,11 +123,8 @@ deploy_api() {
     || warn "npm install başarısız, devam ediliyor"
   success "Sunucu bağımlılıkları güncellendi"
 
-  info "DB migration çalıştırılıyor (sunucuda)"
-  ssh_run "cd $REMOTE_DIR/apps/api && node --env-file=$REMOTE_DIR/.env dist/apps/api/src/db/migrate.js 2>&1" || warn "Migration başarısız veya zaten uygulanmış"
-  info "0006 (domain analysis) yoksa uygulanıyor"
-  rsync_copy "$ROOT/scripts/run-migration-0006.mjs" "$REMOTE_DIR/scripts/" 2>/dev/null || true
-  ssh_run "cd $REMOTE_DIR && node --env-file=$REMOTE_DIR/.env scripts/run-migration-0006.mjs 2>&1" || warn "0006 zaten uygulanmış veya atlandı"
+  info "DB migration çalıştırılıyor (sunucuda, otomatik)"
+  ssh_run "cd $REMOTE_DIR/apps/api && node --env-file=$REMOTE_DIR/.env dist/apps/api/src/db/migrate.js" || error "Migration başarısız. Sunucuda .env ve DATABASE_URL kontrol edin."
   success "Migration tamamlandı"
 
   info "PM2: ecosystem güncel, worker yoksa ekleniyor"
@@ -155,11 +152,10 @@ deploy_api() {
   ssh_run "mkdir -p $REMOTE_DIR/scripts"
   rsync_copy "$ROOT/scripts/nginx-cubiqport.conf" "$REMOTE_DIR/scripts/nginx-cubiqport.conf" 2>/dev/null || true
   rsync_copy "$ROOT/scripts/seed-admin-on-server.mjs" "$REMOTE_DIR/scripts/" 2>/dev/null || true
-  rsync_copy "$ROOT/scripts/install-redis.sh" "$REMOTE_DIR/scripts/install-redis.sh" 2>/dev/null || true
   rsync_copy "$ROOT/scripts/fix-502-server.sh" "$REMOTE_DIR/scripts/" 2>/dev/null || true
   rsync_copy "$ROOT/scripts/nginx-cubiqport-443.conf" "$REMOTE_DIR/scripts/" 2>/dev/null || true
   rsync_copy "$ROOT/scripts/setup-nginx-once.sh" "$REMOTE_DIR/scripts/" 2>/dev/null || true
-  ssh_run "chmod +x $REMOTE_DIR/scripts/install-redis.sh $REMOTE_DIR/scripts/fix-502-server.sh $REMOTE_DIR/scripts/setup-nginx-once.sh 2>/dev/null; true"
+  ssh_run "chmod +x $REMOTE_DIR/scripts/fix-502-server.sh $REMOTE_DIR/scripts/setup-nginx-once.sh 2>/dev/null; true"
   success "Scripts yüklendi"
 }
 
@@ -244,7 +240,7 @@ run_smoke_tests() {
   else
     echo ""
     warn "Bazı smoke testler başarısız (502 = API yanıt vermiyor)."
-    warn "  Sunucuda kontrol et: ssh $SERVER 'curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:4000/health && pm2 list'"
+    warn "  Sunucuda kontrol et: ssh $SERVER 'curl -s -o /dev/null -w %{http_code} http://127.0.0.1:4000/health && pm2 list'"
     warn "  API kapalıysa: pm2 restart cubiqport-api ; pm2 logs cubiqport-api --lines 50"
   fi
 }

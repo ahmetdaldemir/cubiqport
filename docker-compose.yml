@@ -20,22 +20,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── Redis ───────────────────────────────────────────────────────────────────
-  redis:
-    image: redis:7-alpine
-    container_name: cubiq_redis
-    restart: unless-stopped
-    command: redis-server --appendonly yes
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   # ── API ─────────────────────────────────────────────────────────────────────
   api:
     build:
@@ -48,8 +32,6 @@ services:
       - "4000:4000"
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     volumes:
       - ssh_keys:/app/keys
@@ -69,5 +51,4 @@ services:
 
 volumes:
   postgres_data:
-  redis_data:
   ssh_keys:

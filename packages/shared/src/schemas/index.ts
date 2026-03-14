@@ -96,10 +96,9 @@ export const AgentSslSchema = z.object({
   email: z.string().email(),
 });
 
-// ─── Test Databases (dev/test DBs in Docker) ────────────────────────────────────
+// ─── Test Databases (demo DBs on platform server: 50 MB, postgres/mysql only) ───
 export const CreateTestDatabaseSchema = z.object({
-  serverId: z.string().uuid(),
-  type: z.enum(['postgres', 'mysql', 'mongo']),
+  type: z.enum(['postgres', 'mysql']),
   name: z.string().min(1).max(100),
 });
 

@@ -61,6 +61,13 @@ export class AgentService {
     });
   }
 
+  async removeNginxConfig(ip: string, domain: string): Promise<{ success: boolean }> {
+    return agentFetch(ip, '/nginx/remove', {
+      method: 'POST',
+      body: JSON.stringify({ domain }),
+    });
+  }
+
   async installSsl(ip: string, payload: AgentSslPayload): Promise<{ success: boolean }> {
     return agentFetch(ip, '/ssl/install', {
       method: 'POST',

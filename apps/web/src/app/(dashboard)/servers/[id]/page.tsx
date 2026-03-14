@@ -26,6 +26,10 @@ import {
   AlertTriangleIcon,
   MemoryStickIcon,
   TerminalIcon,
+  DatabaseIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  TrashIcon as TrashIconDb,
 } from 'lucide-react';
 import Link from 'next/link';
 import { TerminalModal } from '@/components/terminal/terminal-modal';
@@ -393,6 +397,238 @@ function DockerContainersSection({ serverId, token }: { serverId: string; token:
   );
 }
 
+// ─── Server Databases Section (sunucudaki MySQL/Postgres bağlantıları) ────────
+interface DbConnection {
+  id: string;
+  name: string;
+  type: 'mysql' | 'postgres';
+  host: string;
+  port: number;
+  username: string;
+  createdAt: string;
+}
+
+function ServerDatabasesSection({ serverId, headers }: { serverId: string; headers: Record<string, string> }) {
+  const [connections, setConnections] = useState<DbConnection[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [addLoading, setAddLoading] = useState(false);
+  const [expandedConn, setExpandedConn] = useState<string | null>(null);
+  const [expandedDb, setExpandedDb] = useState<string | null>(null);
+  const [databasesByConn, setDatabasesByConn] = useState<Record<string, string[]>>({});
+  const [tablesByDb, setTablesByDb] = useState<Record<string, string[]>>({});
+  const [loadingDb, setLoadingDb] = useState<string | null>(null);
+  const [form, setForm] = useState({ name: '', type: 'mysql' as 'mysql' | 'postgres', host: '127.0.0.1', port: '3306', username: '', password: '' });
+
+  async function load() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/v1/servers/${serverId}/db-connections`, { headers });
+      const json = await res.json();
+      if (res.ok) setConnections(json.data ?? []);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, [serverId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleAdd(e: React.FormEvent) {
+    e.preventDefault();
+    setAddLoading(true);
+    try {
+      const res = await fetch(`/api/v1/servers/${serverId}/db-connections`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name,
+          type: form.type,
+          host: form.host,
+          port: parseInt(form.port, 10) || (form.type === 'mysql' ? 3306 : 5432),
+          username: form.username,
+          password: form.password,
+        }),
+      });
+      if (res.ok) {
+        setShowAdd(false);
+        setForm({ name: '', type: 'mysql', host: '127.0.0.1', port: '3306', username: '', password: '' });
+        await load();
+      } else {
+        const j = await res.json();
+        alert(j.error ?? 'Eklenemedi');
+      }
+    } finally {
+      setAddLoading(false);
+    }
+  }
+
+  async function loadDatabases(connId: string) {
+    setLoadingDb(connId);
+    try {
+      const res = await fetch(`/api/v1/servers/${serverId}/db-connections/${connId}/databases`, { headers });
+      const json = await res.json();
+      if (res.ok) setDatabasesByConn((prev) => ({ ...prev, [connId]: json.data ?? [] }));
+    } finally {
+      setLoadingDb(null);
+    }
+  }
+
+  async function loadTables(connId: string, dbName: string) {
+    const key = `${connId}:${dbName}`;
+    setLoadingDb(key);
+    try {
+      const res = await fetch(`/api/v1/servers/${serverId}/db-connections/${connId}/databases/${encodeURIComponent(dbName)}/tables`, { headers });
+      const json = await res.json();
+      if (res.ok) setTablesByDb((prev) => ({ ...prev, [key]: json.data ?? [] }));
+    } finally {
+      setLoadingDb(null);
+    }
+  }
+
+  async function deleteConn(connId: string) {
+    if (!confirm('Bu bağlantıyı silmek istediğinize emin misiniz?')) return;
+    const res = await fetch(`/api/v1/servers/${serverId}/db-connections/${connId}`, { method: 'DELETE', headers });
+    if (res.ok) await load();
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+          Sunucudaki Veritabanları
+        </h3>
+        <button
+          onClick={() => setShowAdd(true)}
+          className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90"
+        >
+          <PlusIcon className="h-3.5 w-3.5" />
+          Bağlantı Ekle
+        </button>
+      </div>
+      <p className="text-xs text-muted-foreground mb-4">
+        Sunucuda çalışan MySQL/PostgreSQL bağlantı bilgilerini ekleyin; veritabanları ve tabloları listeleyebilirsiniz.
+      </p>
+
+      {showAdd && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl">
+            <h4 className="font-semibold mb-4">Veritabanı bağlantısı ekle</h4>
+            <form onSubmit={handleAdd} className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Ad</label>
+                <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Örn: Ana MySQL" className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm" required />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Tür</label>
+                <select value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as 'mysql' | 'postgres', port: e.target.value === 'mysql' ? '3306' : '5432' }))} className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm">
+                  <option value="mysql">MySQL</option>
+                  <option value="postgres">PostgreSQL</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Host</label>
+                  <input value={form.host} onChange={(e) => setForm((f) => ({ ...f, host: e.target.value }))} className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Port</label>
+                  <input type="number" value={form.port} onChange={(e) => setForm((f) => ({ ...f, port: e.target.value }))} className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Kullanıcı</label>
+                <input value={form.username} onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))} className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm" required />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Şifre</label>
+                <input type="password" value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm" required />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button type="button" onClick={() => setShowAdd(false)} className="flex-1 rounded-lg border border-border px-3 py-2 text-sm hover:bg-secondary">İptal</button>
+                <button type="submit" disabled={addLoading} className="flex-1 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">{addLoading ? 'Ekleniyor…' : 'Ekle'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="py-6 text-center text-sm text-muted-foreground">Yükleniyor…</div>
+      ) : connections.length === 0 ? (
+        <div className="flex flex-col items-center py-8 text-center">
+          <DatabaseIcon className="h-8 w-8 text-muted-foreground/40" />
+          <p className="mt-2 text-sm text-muted-foreground">Henüz bağlantı eklenmedi.</p>
+          <button onClick={() => setShowAdd(true)} className="mt-3 text-xs text-primary hover:underline">İlk bağlantıyı ekle →</button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {connections.map((c) => (
+            <div key={c.id} className="rounded-lg border border-border bg-secondary/30 overflow-hidden">
+              <div
+                className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-secondary/50"
+                onClick={() => {
+                  const next = expandedConn === c.id ? null : c.id;
+                  setExpandedConn(next);
+                  if (next && !databasesByConn[c.id]) loadDatabases(c.id);
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  {expandedConn === c.id ? <ChevronDownIcon className="h-4 w-4 text-muted-foreground" /> : <ChevronRightIcon className="h-4 w-4 text-muted-foreground" />}
+                  <DatabaseIcon className="h-4 w-4 text-primary" />
+                  <span className="font-medium text-sm">{c.name}</span>
+                  <span className="text-xs text-muted-foreground">({c.type === 'mysql' ? 'MySQL' : 'PostgreSQL'} — {c.host}:{c.port})</span>
+                </div>
+                <button type="button" onClick={(e) => { e.stopPropagation(); deleteConn(c.id); }} className="p-1.5 rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive" title="Bağlantıyı sil">
+                  <TrashIconDb className="h-4 w-4" />
+                </button>
+              </div>
+              {expandedConn === c.id && (
+                <div className="border-t border-border px-4 py-3 bg-card/50">
+                  {loadingDb === c.id ? (
+                    <p className="text-xs text-muted-foreground">Veritabanları yükleniyor…</p>
+                  ) : (databasesByConn[c.id] ?? []).length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Veritabanı bulunamadı veya bağlantı başarısız.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {(databasesByConn[c.id] ?? []).map((dbName) => {
+                        const key = `${c.id}:${dbName}`;
+                        const tables = tablesByDb[key];
+                        const loadingTables = loadingDb === key;
+                        const isExpanded = expandedDb === key;
+                        return (
+                          <div key={dbName} className="pl-4 border-l-2 border-primary/20">
+                            <button
+                              type="button"
+                              className="flex items-center gap-1.5 text-sm text-left w-full py-1 hover:text-primary"
+                              onClick={() => {
+                                setExpandedDb(isExpanded ? null : key);
+                                if (!tables && !loadingTables) loadTables(c.id, dbName);
+                              }}
+                            >
+                              {isExpanded ? <ChevronDownIcon className="h-3.5 w-3.5" /> : <ChevronRightIcon className="h-3.5 w-3.5" />}
+                              <span className="font-mono">{dbName}</span>
+                              {loadingTables && <span className="text-xs text-muted-foreground">yükleniyor…</span>}
+                            </button>
+                            {isExpanded && (
+                              <div className="pl-5 py-1 text-xs text-muted-foreground">
+                                {loadingTables ? 'Tablolar yükleniyor…' : tables ? `Tablolar: ${tables.length === 0 ? '—' : tables.join(', ')}` : '—'}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ServerDetailPage() {
   const params = useParams<{ id: string }>();
@@ -693,6 +929,9 @@ export default function ServerDetailPage() {
             </div>
           )}
         </div>
+
+        {/* Server databases (MySQL/PostgreSQL on this server) */}
+        <ServerDatabasesSection serverId={serverId} headers={headers} />
 
         {/* Docker Containers */}
         <DockerContainersSection serverId={serverId} token={token} />

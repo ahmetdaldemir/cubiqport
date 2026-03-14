@@ -2,9 +2,10 @@ import { db } from '../../db/index.js';
 import { subscriptions } from '../../db/schema.js';
 import { eq } from 'drizzle-orm';
 
-/** Free: 1 DB, 100 MB. Paid (active): 5 DBs, 1024 MB per DB. */
-export const FREE_MAX_DATABASES = 1;
-export const FREE_MAX_STORAGE_MB = 100;
+/** Demo test DBs (on platform server): 50 MB each, PostgreSQL and MySQL only. */
+export const DEMO_MAX_STORAGE_MB = 50;
+export const FREE_MAX_DATABASES = 3;
+export const FREE_MAX_STORAGE_MB = DEMO_MAX_STORAGE_MB;
 export const PAID_MAX_DATABASES = 5;
 export const PAID_MAX_STORAGE_MB = 1024;
 

@@ -68,8 +68,17 @@ CREATE TABLE IF NOT EXISTS webhook_events (
   created_at      TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE TRIGGER subscriptions_updated_at BEFORE UPDATE ON subscriptions FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-CREATE TRIGGER billing_info_updated_at   BEFORE UPDATE ON billing_info   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+-- Idempotent: trigger zaten varsa (yarım kalmış migration) tekrar oluşturma
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'subscriptions_updated_at') THEN
+    CREATE TRIGGER subscriptions_updated_at BEFORE UPDATE ON subscriptions FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  END IF;
+END$$;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'billing_info_updated_at') THEN
+    CREATE TRIGGER billing_info_updated_at BEFORE UPDATE ON billing_info FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  END IF;
+END$$;
 
 -- Mevcut kullanıcılar için trialing subscription (7 gün)
 INSERT INTO subscriptions (user_id, status, billing_period, trial_ends_at)

@@ -212,7 +212,7 @@ export class ServerService {
     for (const { domain, rootPath } of domainDetails) {
       if (SKIP_LIST.has(domain)) continue;
 
-      const existing = await domainRepo.findByDomain(domain);
+      const existing = await domainRepo.findByDomainAndServer(domain, serverId);
       if (!existing) {
         await domainRepo.create({
           serverId,

@@ -30,6 +30,9 @@ async function runMigrations() {
   '0005_billing_tables.sql',
   '0006_domain_analysis_reports.sql',
   '0007_test_databases.sql',
+  '0008_domains_unique_per_server.sql',
+  '0009_test_databases_demo_nullable_server.sql',
+  '0010_server_db_connections.sql',
 ];
 
     for (const file of migrationFiles) {

@@ -7,8 +7,21 @@ const service = new TestDatabaseService();
 type IdParam = { Params: { id: string } };
 
 export async function listTestDatabases(req: FastifyRequest, reply: FastifyReply) {
-  const data = await service.list(req.user!.sub);
-  return reply.send({ success: true, data });
+  try {
+    const data = await service.list(req.user!.sub);
+    return reply.send({ success: true, data });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('does not exist') || msg.includes('relation') || msg.includes('test_databases')) {
+      req.log.warn({ err }, 'Databases list failed — migrations may not be applied');
+      return reply.status(503).send({
+        success: false,
+        error: 'Veritabanı tabloları henüz uygulanmamış. Sunucuda: cd apps/api && npm run db:migrate',
+        code: 'MIGRATIONS_PENDING',
+      });
+    }
+    throw err;
+  }
 }
 
 export async function getTestDatabase(

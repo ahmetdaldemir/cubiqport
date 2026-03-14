@@ -19,6 +19,7 @@ import {
   stopContainer,
   deleteContainer,
 } from './server.controller.js';
+import { serverDbConnectionRoutes } from '../server-databases/server-db-connection.routes.js';
 
 type IdParam = { Params: { id: string } };
 type ReinstallParam = { Params: { id: string }; Body: { confirm: string } };
@@ -52,4 +53,7 @@ export async function serverRoutes(fastify: FastifyInstance) {
   fastify.post<ContainerParam>('/:id/containers/:name/restart', auth, restartContainer);
   fastify.post<ContainerParam>('/:id/containers/:name/stop', auth, stopContainer);
   fastify.delete<ContainerParam>('/:id/containers/:name', auth, deleteContainer);
+
+  // Server database connections (list DBs/tables on server)
+  await fastify.register(serverDbConnectionRoutes, { prefix: '/:id/db-connections' });
 }

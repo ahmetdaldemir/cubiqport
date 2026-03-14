@@ -1,8 +1,19 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 // encrypt modülünü mock'la — gerçek kripto işlemi gerektirmesin
 vi.mock('../encrypt.js', () => ({
   decrypt: (val: string) => `decrypted:${val}`,
+}));
+
+// config import edildiğinde parseEnv çalışmasın (ssh-credentials config kullanıyor)
+vi.mock('../../config/index.js', () => ({
+  config: {
+    TEST_DATABASE_HOST: '',
+    TEST_DATABASE_SSH_PORT: 22,
+    TEST_DATABASE_SSH_USER: 'root',
+    TEST_DATABASE_SSH_PRIVATE_KEY: undefined,
+    TEST_DATABASE_SSH_PASSWORD: undefined,
+  },
 }));
 
 // Mock'tan sonra import et

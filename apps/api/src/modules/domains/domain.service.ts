@@ -12,6 +12,7 @@ import {
   makeDirectory,
   gitDeploy,
   createNginxConfigViaSsh,
+  removeNginxConfigViaSsh,
   runRemoteCommand,
 } from '../../services/ssh.service.js';
 import { buildSshOptions, type ServerSshFields } from '../../utils/ssh-credentials.js';
@@ -53,8 +54,8 @@ export class DomainService {
       throw new AppError('Server must be active before adding domains', 400);
     }
 
-    const existing = await domainRepo.findByDomain(input.domain);
-    if (existing) throw new ConflictError(`Domain '${input.domain}' already exists`);
+    const existing = await domainRepo.findByDomainAndServer(input.domain, input.serverId);
+    if (existing) throw new ConflictError(`Bu sunucuda '${input.domain}' domain'i zaten kayıtlı`);
 
     const domain = await domainRepo.create({
       serverId: input.serverId,
@@ -84,7 +85,23 @@ export class DomainService {
     const domain = await domainRepo.findById(id, userId);
     if (!domain) throw new NotFoundError('Domain');
 
-    // Clean up Cloudflare records
+    const server = await serverRepo.findByIdUnscoped(domain.serverId);
+    if (server) {
+      try {
+        await agentService.removeNginxConfig(server.ip, domain.domain);
+        logger.info({ domainId: id, domain: domain.domain }, 'Nginx config removed via agent');
+      } catch (agentErr) {
+        logger.warn({ agentErr, domainId: id }, 'Agent nginx/remove failed — trying SSH');
+        try {
+          const opts = buildSshOptions(server);
+          await removeNginxConfigViaSsh(opts, domain.domain);
+          logger.info({ domainId: id }, 'Nginx config removed via SSH');
+        } catch (sshErr) {
+          logger.warn({ sshErr, domainId: id }, 'SSH nginx remove failed — continuing with domain delete');
+        }
+      }
+    }
+
     const records = await dnsRepo.findByDomainId(id);
     for (const rec of records) {
       if (rec.cloudflareId) {

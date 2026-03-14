@@ -31,6 +31,14 @@ export class DomainRepository {
     return db.query.domains.findMany({ where: eq(domains.serverId, serverId) });
   }
 
+  /** Same domain name is allowed on different servers; use this to check within one server. */
+  async findByDomainAndServer(domain: string, serverId: string): Promise<Domain | undefined> {
+    return db.query.domains.findFirst({
+      where: and(eq(domains.domain, domain), eq(domains.serverId, serverId)),
+    });
+  }
+
+  /** @deprecated Use findByDomainAndServer for create/sync. Kept for backward compatibility. */
   async findByDomain(domain: string): Promise<Domain | undefined> {
     return db.query.domains.findFirst({ where: eq(domains.domain, domain) });
   }

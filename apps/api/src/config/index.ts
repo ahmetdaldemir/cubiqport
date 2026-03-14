@@ -6,8 +6,6 @@ const envSchema = z.object({
   API_HOST: z.string().default('0.0.0.0'),
 
   DATABASE_URL: z.string().url(),
-  /** Redis: kuyruk (BullMQ) ve canlı metrik önbelleği. Yoksa analiz işleri API sürecinde çalışır. */
-  REDIS_URL: z.string().url().optional(),
 
   JWT_SECRET: z.string().min(32),
   JWT_EXPIRES_IN: z.string().default('7d'),
@@ -19,6 +17,13 @@ const envSchema = z.object({
 
   AGENT_PORT: z.coerce.number().default(9000),
   AGENT_SECRET: z.string().min(16),
+
+  /** Demo test DBs: created on this host. If set, test DBs use this server (SSH) instead of user server. */
+  TEST_DATABASE_HOST: z.string().optional(),
+  TEST_DATABASE_SSH_PORT: z.coerce.number().default(22),
+  TEST_DATABASE_SSH_USER: z.string().default('root'),
+  TEST_DATABASE_SSH_PRIVATE_KEY: z.string().optional(),
+  TEST_DATABASE_SSH_PASSWORD: z.string().optional(),
 
   // Email (optional)
   SMTP_HOST:   z.string().optional(),
@@ -45,13 +50,8 @@ function parseEnv() {
     const issues = result.error.issues.map((i) => `  ${i.path.join('.')}: ${i.message}`).join('\n');
     throw new Error(`Invalid environment variables:\n${issues}`);
   }
-  const data = result.data;
-  if (data.REDIS_URL === '') data.REDIS_URL = undefined;
-  return data;
+  return result.data;
 }
 
 export const config = parseEnv();
-export function hasRedis(): boolean {
-  return !!config.REDIS_URL?.trim();
-}
 export type Config = typeof config;

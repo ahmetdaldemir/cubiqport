@@ -1,0 +1,39 @@
+---
+description: DB migration SQL kuralları — idempotent ve güvenli migration yazımı
+globs: "**/db/migrations/*.sql"
+alwaysApply: false
+---
+
+# DB Migration Kuralları
+
+## Idempotent ol
+
+Migration yarım kalabilir veya tetikleyici/nesne zaten manuel veya önceki denemede oluşturulmuş olabilir. Aynı migration tekrar çalıştığında hata vermemeli.
+
+- **Tablo**: `CREATE TABLE IF NOT EXISTS`
+- **Index**: `CREATE INDEX IF NOT EXISTS`
+- **Type/ENUM**: `DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '...') THEN CREATE TYPE ... END IF; END$$;`
+- **Trigger**: PostgreSQL'de `CREATE TRIGGER IF NOT EXISTS` yok; tetikleyiciyi sadece yoksa oluştur:
+
+```sql
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trigger_adi') THEN
+    CREATE TRIGGER trigger_adi BEFORE UPDATE ON tablo FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  END IF;
+END$$;
+```
+
+## INSERT / veri migration
+
+Mevcut satırları tekrar ekleme: `WHERE NOT EXISTS` veya `ON CONFLICT` kullan.
+
+```sql
+INSERT INTO subscriptions (...)
+  SELECT ... FROM users u
+  WHERE NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.user_id = u.id);
+```
+
+## Özet
+
+- Yeni migration yazarken tetikleyici ve tekrar çalıştırılabilecek DDL'leri idempotent yap.
+- "already exists" hataları genelde tetikleyici veya type için IF NOT EXISTS/DO bloğu ekleyerek giderilir.
